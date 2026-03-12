@@ -3,6 +3,11 @@ import pandas as pd
 import time
 import os
 
+# Importing the script files
+import logic
+import logic2
+import logic3
+
 #Page Configuration
 st.set_page_config(page_title="Davis Lab Redesign", layout="wide")
 
@@ -20,7 +25,6 @@ workflow_step = st.sidebar.radio("Navigate Workflow",
 #Step 1: Data Input
 if workflow_step == "1. Data Input":
     st.header("Step 1: Structural Data Input")
-    st.info("Upload the PDB file for the CaM-RyR2 complex.")
     
     # Updated Uploader for PDB files
     uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'])
@@ -52,8 +56,8 @@ if workflow_step == "1. Data Input":
         st.write(f"Saved file path: {path}")
         
         # Quick summary of the file
-        st.subheader("PDB File Preview (Header)")
-        st.code(pdb_bytes[:500] + "...", language="text")
+        with st.expander("📄 View PDB File Header"):
+            st.code(pdb_bytes[:500] + "...", language="text")
         
         # Placeholder for 3D Visualization
         st.warning("Note: To view the 3D structure, you will need to install 'stmol'.")
@@ -66,6 +70,12 @@ if workflow_step == "1. Data Input":
             if json_path:
                 st.success(f"Analysis complete! Results saved to: {json_path}")
                 st.session_state["json_path"] = json_path  # save for Step 3
+                
+                with st.expander("🔬 View JSON Contents"):
+                    with open(json_path) as f:
+                        import json as jsonlib
+                        json_data = jsonlib.load(f)
+                    st.json(json_data)
 
 #Step 2: JSON Processing
 elif workflow_step == "2. JSON Processing":
@@ -141,17 +151,31 @@ elif workflow_step == "3. OSPREY Execution":
         cores = st.number_input("CPU Cores", 1, 16, 4)
 
     if st.button("Generate & Run OSPREY Script"):
-        import logic3
         with st.spinner("Generating OSPREY Script..."):
             generated = logic3.create_folders_and_files(
                 json_path, pdb_path, epsilon=epsilon, cpu_cores=int(cores),
-                target_residue = target_res,   # pass selected residue
-                amino_acids = mutations        # pass selected amino acids
+                target_residue=target_res,
+                amino_acids=mutations
         )
         st.success(f"{len(generated)} OSPREY script(s) generated!")
         for f in generated:
             st.write(f"• {f}")
         st.session_state["osprey_scripts"] = generated
+
+    # ← NEW: Run the generated scripts
+        with st.spinner("Running OSPREY (this may take a while)..."):
+            run_results = logic3.run_osprey_scripts(generated)
+
+        for r in run_results:
+            if "error" in r:
+                st.error(f"❌ {r['script']}: {r['error']}")
+            elif r["returncode"] != 0:
+            st.error(f"❌ {r['script']} failed:\n{r['stderr']}")
+        else:
+            st.success(f"✅ {r['script']} completed")
+            if r["stdout"]:
+                with st.expander("View output"):
+                    st.code(r["stdout"])
 
 #Step 4: Results
 elif workflow_step == "4. Results & Analytics":

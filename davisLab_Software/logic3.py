@@ -2,6 +2,8 @@
 
 import os
 import json
+import sys
+import subprocess
 
 def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, target_residue=None, amino_acids=None):
     # Extract the name of the JSON file (without the extension) to be used as the folder name
@@ -108,7 +110,6 @@ bbkstar = osprey.BBKStar(
 	ligandConfSpace,
 	complexConfSpace,
 	numBestSequences=1, # more sequenses - more computation time
-	epsilon=0.01, # you proabably want something more precise in your real designs
 	writeSequencesToConsole=True,
 	writeSequencesToFile='bbkstar_results_{file_name}_{key}.tsv'
     epsilon={epsilon},
@@ -176,3 +177,24 @@ for scoredSequence in scoredSequences:
         generated_files.append(py_file)
     return generated_files
 
+def run_osprey_scripts(generated_files):
+    """Run all generated bbkstar*.py scripts using the current Python interpreter"""
+    results = []
+    for path in generated_files:
+        folder = os.path.dirname(path)
+        try:
+            result = subprocess.run(
+                [sys.executable, path],  # ← uses whatever python is running the app
+                cwd=folder,
+                capture_output=True,
+                text=True
+            )
+            results.append({
+                "script": path,
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr
+            })
+        except Exception as e:
+            results.append({"script": path, "error": str(e)})
+    return results
