@@ -2,9 +2,13 @@
 
 import os
 import json
+import sys
+import subprocess
 
-def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, target_residue=None, amino_acids=None):
+def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gpus = 0, streams_per_gpu = 0, heap_size = 100000, garbage_size = 8192, target_residue=None, amino_acids=None):
     # Extract the name of the JSON file (without the extension) to be used as the folder name
+    pdb_path  = pdb_path.replace("\\", "/")
+    json_file = json_file.replace("\\", "/")
     file_name = os.path.splitext(os.path.basename(json_file))[0]
     output_dir = os.path.join(os.path.dirname(json_file), file_name)
     os.makedirs(output_dir, exist_ok=True)
@@ -13,21 +17,18 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, ta
     with open(json_file, 'r') as f:
         data = json.load(f)
 
-    # Check if the key "Complex_Size" exists in the JSON data
-    if "Complex_Size" in data:
-        # Extract the variables from the "Complex_Size" dictionary
-        variables = data["Complex_Size"]
-        variable1 = variables.get("mutant_beginning", "KEY1")
-        variable2 = variables.get("mutant_ending", "KEY2")
-        variable3 = variables.get("ligand_beginning", "KEY3")
-        variable4 = variables.get("ligand_ending", "KEY4")
-        
-    else:
-        # If "Complex_Size" key is not present, set default values for variables
-        variable1 = "KEY1"
-        variable2 = "KEY2"
-        variable3 = "KEY3"
-        variable4 = "KEY4"
+    # Validate Complex_Size exists and is populated
+    if "Complex_Size" not in data:
+        raise ValueError("JSON is missing 'Complex_Size' block. Please complete Step 2 first.")
+
+    variables = data["Complex_Size"]
+    variable1 = variables.get("mutant_beginning") or ""
+    variable2 = variables.get("mutant_ending") or ""
+    variable3 = variables.get("ligand_beginning") or ""
+    variable4 = variables.get("ligand_ending") or ""
+
+    if not all([variable1, variable2, variable3, variable4]):
+        raise ValueError(f"Complex_Size has empty fields: {variables}. Please re-run Step 2 with valid residue ranges.")
         
     generated_files = []# Making an empty
 
@@ -41,7 +42,10 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, ta
         if target_residue and key != target_residue:
             continue
         # Remove the last character from the key
-        truncated_key = key[:-1]
+        # Format: 'A 7' from key 'A7E'
+        chain = key[0]
+        number = key[1:-1]
+        truncated_key = f"{chain}{number}"
     
         # Create a folder with the name of the key (if it doesn't exist)
         subfolder = os.path.join(output_dir, key)
@@ -52,35 +56,44 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, ta
         subkeys_from_B = list(subdata["B"].keys())            
             
         # Create the content for the .py file
+
+        # Build amino acid string from user selection
+        if amino_acids:
+            aa_string = ", ".join(f"'{aa}'" for aa in amino_acids)
+            # The count is the number of mutations + 1 for the WILD_TYPE
+            num_seqs = len(amino_acids) + 1
+        else:
+            aa_string = "'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP'"
+            # There are 10 amino acids above + 1 for the WILD_TYPE
+            num_seqs = 11
         py_content = f'''
 
 import osprey
-osprey.start(heapSizeMiB=100000, garbageSizeMiB=8192)
+osprey.start(heapSizeMiB={heap_size}, garbageSizeMiB={garbage_size})
 
 # choose a forcefield
 ffparams = osprey.ForcefieldParams()
 
 # read a PDB file for molecular info
-mol = osprey.readPdb('{pdb_path}')
+mol = osprey.readPdb("{pdb_path}")
 # make sure all strands share the same template library
 templateLib = osprey.TemplateLibrary(ffparams.forcefld)
 
 # define the protein strand
 protein = osprey.Strand(mol, templateLib=templateLib, residues=['{variable1}', '{variable2}'])
-protein.flexibility['{truncated_key}'].setLibraryRotamers(osprey.WILD_TYPE, 'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ASN', 'GLN', 'ARG', 'LYS', 'SER', 'THR', 'CYS', 'HIS').addWildTypeRotamers().setContinuous()
+protein.flexibility['{truncated_key}'].setLibraryRotamers(osprey.WILD_TYPE, {aa_string}).addWildTypeRotamers().setContinuous()
 
-# define the ligand strand
-ligand = osprey.Strand(mol, templateLib=templateLib, residues=['{variable3}', '{variable4}'])
 '''
 
         # Add subkeys from object "A" to the .py content
         for subkey_A in subkeys_from_A:
             py_content += f"protein.flexibility['{subkey_A}'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()\n"
 
-        # Add subkeys from object "B" to the .py content
+        py_content += f"\n# define the ligand strand\nligand = osprey.Strand(mol, templateLib=templateLib, residues=['{variable3}', '{variable4}'])\n"
+
+
         for subkey_B in subkeys_from_B:
             py_content += f"ligand.flexibility['{subkey_B}'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()\n"
-
         py_content += f'''
         
         
@@ -95,7 +108,7 @@ complexConfSpace = osprey.ConfSpace([protein, ligand])
 
 # how should we compute energies of molecules?
 # (give the complex conf space to the ecalc since it knows about all the templates and degrees of freedom)
-parallelism = osprey.Parallelism(cpuCores={cpu_cores}, gpus=1, streamsPerGpu=82)
+parallelism = osprey.Parallelism(cpuCores={cpu_cores},  gpus={gpus}, streamsPerGpu={streams_per_gpu})
 minimizingEcalc = osprey.EnergyCalculator(complexConfSpace, ffparams, parallelism=parallelism, isMinimizing=True)
 
 # BBK* needs a rigid energy calculator too, for multi-sequence bounds on K*
@@ -104,13 +117,12 @@ rigidEcalc = osprey.SharedEnergyCalculator(minimizingEcalc, isMinimizing=False)
 
 # configure BBK*
 bbkstar = osprey.BBKStar(
-	proteinConfSpace,
-	ligandConfSpace,
-	complexConfSpace,
-	numBestSequences=1, # more sequenses - more computation time
-	epsilon=0.01, # you proabably want something more precise in your real designs
-	writeSequencesToConsole=True,
-	writeSequencesToFile='bbkstar_results_{file_name}_{key}.tsv'
+    proteinConfSpace,
+    ligandConfSpace,
+    complexConfSpace,
+    numBestSequences={num_seqs},
+    writeSequencesToConsole=True,
+    writeSequencesToFile='bbkstar_results_{file_name}_{key}.tsv',
     epsilon={epsilon},
 )
 
@@ -176,3 +188,24 @@ for scoredSequence in scoredSequences:
         generated_files.append(py_file)
     return generated_files
 
+def run_osprey_scripts(generated_files):
+    """Run all generated bbkstar*.py scripts using the current Python interpreter"""
+    results = []
+    for path in generated_files:
+        folder = os.path.dirname(path)
+        try:
+            result = subprocess.run(
+                [sys.executable, path],  # ← uses whatever python is running the app
+                cwd=folder,
+                capture_output=True,
+                text=True
+            )
+            results.append({
+                "script": path,
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr
+            })
+        except Exception as e:
+            results.append({"script": path, "error": str(e)})
+    return results
