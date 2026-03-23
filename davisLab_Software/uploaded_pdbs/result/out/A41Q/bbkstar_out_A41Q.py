@@ -1,25 +1,26 @@
 
 
 import osprey
-osprey.start(heapSizeMiB=100000, garbageSizeMiB=8192)
+osprey.start(heapSizeMiB=12000, garbageSizeMiB=4096)
 
 # choose a forcefield
 ffparams = osprey.ForcefieldParams()
 
 # read a PDB file for molecular info
-mol = osprey.readPdb('D:\BME 4901.2 Capstone Project Software\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\uploaded_pdbs\6MBA.pdb')
+mol = osprey.readPdb("D:/BME 4901.2 Capstone Project Software/Jerrica's Branch of Capstone-Project-Software-Team/Capstone-Project-Software-Team/davisLab_Software/uploaded_pdbs/6Y4O_fixed.pdb")
 # make sure all strands share the same template library
 templateLib = osprey.TemplateLibrary(ffparams.forcefld)
 
 # define the protein strand
-protein = osprey.Strand(mol, templateLib=templateLib, residues=['148', ''])
-protein.flexibility['A1656'].setLibraryRotamers(osprey.WILD_TYPE, 'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ASN', 'GLN', 'ARG', 'LYS', 'SER', 'THR', 'CYS', 'HIS').addWildTypeRotamers().setContinuous()
+protein = osprey.Strand(mol, templateLib=templateLib, residues=['A11', 'A145'])
+protein.flexibility['A41'].setLibraryRotamers(osprey.WILD_TYPE, 'LEU', 'GLU').addWildTypeRotamers().setContinuous()
+
+protein.flexibility['A36'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
 
 # define the ligand strand
-ligand = osprey.Strand(mol, templateLib=templateLib, residues=['', ''])
-protein.flexibility['A1657'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
-protein.flexibility['A1658'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
-ligand.flexibility['B14'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
+ligand = osprey.Strand(mol, templateLib=templateLib, residues=['B3615', 'B3637'])
+ligand.flexibility['B3637'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
+ligand.flexibility['B3633'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
 
         
         
@@ -34,7 +35,7 @@ complexConfSpace = osprey.ConfSpace([protein, ligand])
 
 # how should we compute energies of molecules?
 # (give the complex conf space to the ecalc since it knows about all the templates and degrees of freedom)
-parallelism = osprey.Parallelism(cpuCores=4, gpus=1, streamsPerGpu=82)
+parallelism = osprey.Parallelism(cpuCores=10,  gpus=1, streamsPerGpu=4)
 minimizingEcalc = osprey.EnergyCalculator(complexConfSpace, ffparams, parallelism=parallelism, isMinimizing=True)
 
 # BBK* needs a rigid energy calculator too, for multi-sequence bounds on K*
@@ -43,13 +44,12 @@ rigidEcalc = osprey.SharedEnergyCalculator(minimizingEcalc, isMinimizing=False)
 
 # configure BBK*
 bbkstar = osprey.BBKStar(
-	proteinConfSpace,
-	ligandConfSpace,
-	complexConfSpace,
-	numBestSequences=1, # more sequenses - more computation time
-	epsilon=0.01, # you proabably want something more precise in your real designs
-	writeSequencesToConsole=True,
-	writeSequencesToFile='bbkstar_results_out_A1656P.tsv'
+    proteinConfSpace,
+    ligandConfSpace,
+    complexConfSpace,
+    numBestSequences=3,
+    writeSequencesToConsole=True,
+    writeSequencesToFile='bbkstar_results_out_A41Q.tsv',
     epsilon=0.99,
 )
 
