@@ -7,20 +7,20 @@ osprey.start(heapSizeMiB=12000, garbageSizeMiB=4096)
 ffparams = osprey.ForcefieldParams()
 
 # read a PDB file for molecular info
-mol = osprey.readPdb("D:/BME 4901.2 Capstone Project Software/Jerrica's Branch of Capstone-Project-Software-Team/Capstone-Project-Software-Team/davisLab_Software/uploaded_pdbs/6Y4O_fixed.pdb")
+mol = osprey.readPdb("D:/BME 4901.2 Capstone Project Software/Jerrica's Branch of Capstone-Project-Software-Team/Capstone-Project-Software-Team/davisLab_Software/uploaded_pdbs/6MBA_fixed.pdb")
 # make sure all strands share the same template library
 templateLib = osprey.TemplateLibrary(ffparams.forcefld)
 
 # define the protein strand
-protein = osprey.Strand(mol, templateLib=templateLib, residues=['A4', 'A145'])
-protein.flexibility['A41'].setLibraryRotamers(osprey.WILD_TYPE, 'LEU', 'GLU').addWildTypeRotamers().setContinuous()
+protein = osprey.Strand(mol, templateLib=templateLib, residues=['B3', 'B147'])
+protein.flexibility['A1656'].setLibraryRotamers(osprey.WILD_TYPE, 'ILE', 'MET').addWildTypeRotamers().setContinuous()
 
-protein.flexibility['A36'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
+protein.flexibility['A1657'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
+protein.flexibility['A1658'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
 
 # define the ligand strand
-ligand = osprey.Strand(mol, templateLib=templateLib, residues=['B3615', 'B3638'])
-ligand.flexibility['B3637'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
-ligand.flexibility['B3633'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
+ligand = osprey.Strand(mol, templateLib=templateLib, residues=['A1612', 'A1748'])
+ligand.flexibility['B14'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
 
         
         
@@ -49,7 +49,7 @@ bbkstar = osprey.BBKStar(
     complexConfSpace,
     numBestSequences=3,
     writeSequencesToConsole=True,
-    writeSequencesToFile='bbkstar_results_out_A41Q.tsv',
+    writeSequencesToFile='bbkstar_results_out_A1656P.tsv',
     epsilon=0.99,
 )
 

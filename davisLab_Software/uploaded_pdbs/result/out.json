@@ -474,9 +474,9 @@
         }
     },
     "Complex_Size": {
-        "mutant_beginning": "A1656",
-        "mutant_ending": "A1745",
-        "ligand_beginning": "B11",
-        "ligand_ending": "B147"
+        "mutant_beginning": "A4",
+        "mutant_ending": "A145",
+        "ligand_beginning": "B3615",
+        "ligand_ending": "B3638"
     }
 }
