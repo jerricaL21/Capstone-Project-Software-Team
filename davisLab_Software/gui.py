@@ -33,43 +33,79 @@ workflow_step = st.sidebar.radio("Navigate Workflow",
 if workflow_step == "1. Data Input":
     st.header("Step 1: Structural Data Input")
     
-    # Updated Uploader for PDB files
     uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'])
     
-    # Input for PDB ID (Optional backup)
     pdb_id = st.text_input("OR Enter Target PDB ID to fetch from RCSB", "2RL0")
     
     if uploaded_pdb is not None:
         
-        # NEW: create folder if it doesn't exist
         os.makedirs("uploaded_pdbs", exist_ok=True)
-        
-        # NEW: define the path variable
         path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_pdb.name))
         
-        # NEW: save the file to disk
         with open(path, "wb") as f:
             f.write(uploaded_pdb.getvalue())
         
-        # Save path to session state so logic.py can access it
         st.session_state["path"] = path
 
-        # Read the file content
         pdb_bytes = uploaded_pdb.getvalue().decode("utf-8")
         
         st.success(f"Successfully loaded: {uploaded_pdb.name}")
-        
-        # NEW: show saved path
         st.write(f"Saved file path: {path}")
         
-        # Quick summary of the file
         with st.expander("📄 View PDB File Header"):
             st.code(pdb_bytes[:500] + "...", language="text")
         
-        # Placeholder for 3D Visualization
         st.warning("Note: To view the 3D structure, you will need to install 'stmol'.")
 
-        # ✅ User must click button — analysis only runs on explicit click
+        # ── Chain identification — only runs once per uploaded file ───────
+        already_identified = (
+            "chain_results" in st.session_state and
+            st.session_state.get("identified_for") == uploaded_pdb.name
+        )
+
+        if not already_identified:
+            with st.spinner("Identifying chains..."):
+                try:
+                    chain_results = logic.identify_calmodulin_chain(path)
+                    st.session_state["chain_results"]    = chain_results
+                    st.session_state["identified_for"]   = uploaded_pdb.name  # track which file was identified
+                except Exception as e:
+                    st.error(f"Chain identification failed: {e}")
+                    chain_results = {}
+        else:
+            chain_results = st.session_state["chain_results"]
+
+        # ── Display results ───────────────────────────────────────────────
+        if chain_results: # Checks the dictionary isn't empty before trying to display anything.
+            st.subheader("🔍 Chain Identification")
+
+            cam_chain    = None # Start both as None — they'll get filled in during the loop below.
+            ligand_chain = None
+
+            for chain_id, info in chain_results.items():
+                if info["is_calmodulin"]: # Checks if this chain was identified as calmodulin (i.e. identity ≥ 80%).
+                    cam_chain = chain_id
+                    st.success(
+                        f"Chain **{chain_id}** → CALMODULIN "
+                        f"({info['identity']}% identity to human CaM, {info['length']} residues)"
+                    )
+                else: # If the chain is NOT calmodulin, it must be the ligand.
+                    ligand_chain = chain_id
+                    st.info(
+                        f"Chain **{chain_id}** → Ligand / peptide "
+                        f"({info['identity']}% identity to human CaM, {info['length']} residues)"
+                    )
+
+            if not cam_chain: # If after looping through all chains, cam_chain is still None, no calmodulin was found.
+                st.warning(
+                    "⚠️ No chain matched calmodulin (≥80% identity). "
+                    "Proceed to Step 2 and enter residue ranges manually."
+                )
+
+            st.session_state["cam_chain"]    = cam_chain # Saves both chain letters into session state so Step 2 can access them later 
+            st.session_state["ligand_chain"] = ligand_chain
+
+        # ── Run Analysis button — sits after chain identification ─────────
         if st.button("▶ Run Analysis"):
             with st.spinner("Fixing PDB protonation..."):
                 fixed_pdb = logic.fix_pdb_protonation(path)
@@ -121,11 +157,97 @@ elif workflow_step == "2. JSON Processing":
         import logic2
         st.subheader("Set Residue Range Boundaries")
 
+        # ── Pull chain info from session_state ────────────────────────────
+        cam_chain     = st.session_state.get("cam_chain", None)
+        ligand_chain  = st.session_state.get("ligand_chain", None)
+        chain_results = st.session_state.get("chain_results", {})
+
+        # ── Build residue options from actual PDB residue numbers ─────────
+        pdb_path_for_residues = st.session_state.get("path", None)
+
+        # Read residue map once for both chains
+        residue_map = {}
+        if pdb_path_for_residues and os.path.exists(pdb_path_for_residues):
+            try:
+                residue_map = logic.get_residue_numbers(pdb_path_for_residues)
+            except Exception:
+                pass
+
+        def get_residue_options(chain_id):
+            """Reads actual residue numbers from PDB ATOM lines for the given chain."""
+            if chain_id and residue_map:
+                options = residue_map.get(chain_id, [])
+                if options:
+                    return options
+            # Fallback: generate 1..length if PDB not available
+            if chain_id and chain_id in chain_results:
+                length = chain_results[chain_id]["length"]
+                return [f"{chain_id}{i}" for i in range(1, length + 1)]
+            return []
+
+        cam_options    = get_residue_options(cam_chain)
+        ligand_options = get_residue_options(ligand_chain)
+
+        # ── Show chain identification summary as reminder ─────────────────
+        if cam_chain and ligand_chain:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.success(f"Calmodulin chain: **{cam_chain}** ({chain_results[cam_chain]['length']} residues)")
+            with col2:
+                st.info(f"Ligand chain: **{ligand_chain}** ({chain_results[ligand_chain]['length']} residues)")
+        else:
+            st.warning("⚠️ Chain identification not found. Please complete Step 1 first, or enter ranges manually.")
+
         with st.form("residue_form"):
-            mutant_start = st.text_input("Mutant Beginning")
-            mutant_end   = st.text_input("Mutant Ending")
-            ligand_start = st.text_input("Ligand Beginning")
-            ligand_end   = st.text_input("Ligand Ending")
+
+            # ── Mutant (calmodulin) range ─────────────────────────────────
+            st.markdown("**Calmodulin (Mutant) Range**")
+            if cam_options:
+                col1, col2 = st.columns(2)
+                with col1:
+                    mutant_start = st.selectbox(
+                        "Mutant Beginning",
+                        options=cam_options,
+                        index=0  # default to first residue
+                    )
+                with col2:
+                    mutant_end = st.selectbox(
+                        "Mutant Ending",
+                        options=cam_options,
+                        index=len(cam_options) - 1  # default to last residue
+                    )
+            else:
+                # Fallback to text input if chain identification wasn't run
+                col1, col2 = st.columns(2)
+                with col1:
+                    mutant_start = st.text_input("Mutant Beginning")
+                with col2:
+                    mutant_end = st.text_input("Mutant Ending")
+
+            st.markdown("**Ligand Range**")
+            # ── Ligand range ──────────────────────────────────────────────
+            if ligand_options:
+                col1, col2 = st.columns(2)
+                with col1:
+                    ligand_start = st.selectbox(
+                        "Ligand Beginning",
+                        options=ligand_options,
+                        index=0  # default to first residue
+                    )
+                with col2:
+                    ligand_end = st.selectbox(
+                        "Ligand Ending",
+                        options=ligand_options,
+                        index=len(ligand_options) - 1  # default to last residue
+                    )
+            else:
+                # Fallback to text input if chain identification wasn't run
+                col1, col2 = st.columns(2)
+                with col1:
+                    ligand_start = st.text_input("Ligand Beginning")
+                with col2:
+                    ligand_end = st.text_input("Ligand Ending")
+
             submitted = st.form_submit_button("▶ Process JSON(s)")
 
         if submitted:
