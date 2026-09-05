@@ -29,7 +29,12 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gp
 
     if not all([variable1, variable2, variable3, variable4]):
         raise ValueError(f"Complex_Size has empty fields: {variables}. Please re-run Step 2 with valid residue ranges.")
-        
+
+
+    #-----Requires at least one amino acid to be selected. If not, OSPREY does't run---#
+    if not amino_acids:
+        raise ValueError("Please select at least one amino acid before generating OSPREY scripts.")    
+    
     generated_files = []# Making an empty
 
     # Loop through the JSON data and create folders and .py files
@@ -63,7 +68,7 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gp
             # The count is the number of mutations + 1 for the WILD_TYPE
             num_seqs = len(amino_acids) + 1
         else:
-            aa_string = "'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP'"
+            aa_string = "'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'PRO', 'SER', 'THR'"
             # There are 10 amino acids above + 1 for the WILD_TYPE
             num_seqs = 11
         py_content = f'''
