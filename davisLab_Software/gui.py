@@ -3,6 +3,17 @@ import pandas as pd
 import time
 import os
 import importlib
+from install_pymol import ensure_pymol
+
+# ── Ensure PyMOL is available in this interpreter (cached so it only
+#    checks/installs once per session, not on every Streamlit rerun) ──
+@st.cache_resource
+def _pymol_ready():
+    return ensure_pymol()
+
+pymol_ok = _pymol_ready()
+if not pymol_ok:
+    st.sidebar.error("⚠️ PyMOL not available — Step 5 will not work.")
 
 # Importing the script files
 import logic
@@ -10,12 +21,14 @@ import logic2
 import logic3
 import logic4
 import logic5
+import logic6
 
 importlib.reload(logic)
 importlib.reload(logic2)
 importlib.reload(logic3)
 importlib.reload(logic4)
 importlib.reload(logic5)
+importlib.reload(logic6)
 
 # Used in Step 3 to figure out which three-letter amino acid code corresponds to wild-type residue code
 AA_1TO3 = {
@@ -37,7 +50,7 @@ st.markdown("""
 
 st.sidebar.header("Pipeline Controls")
 workflow_step = st.sidebar.radio("Navigate Workflow", 
-    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. Mutant Prediction"])
+    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. PyMOL Redesign"])
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 1: Data Input
@@ -166,10 +179,10 @@ if workflow_step == "1. Data Input":
             # Describe what repair strategy will be used
             if report["has_missing_residues"]:
                 st.warning(
-                    "⚠️ **Missing residues detected.** Automatic remodelling is currently "
-                    "disabled — the pipeline will proceed with the original coordinates. "
-                    "Side chains will still be repaired if needed. "
-                    "Boltz-2 residue remodelling can be enabled in `logic5.py` when ready."
+                    "⚠️ **Missing residues detected.** No automatic repair is "
+                    "currently available for missing residues — the pipeline "
+                    "will proceed with the original coordinates. "
+                    "Side chains will still be repaired if needed."
                 )
             elif report["has_missing_sidechains"]:
                 st.info(
@@ -178,18 +191,6 @@ if workflow_step == "1. Data Input":
                 )
             else:
                 st.success("✅ PDB is complete — no repair needed before analysis.")
-
-        # ── MSA server option (only relevant if Boltz-2 will be used) ────
-        use_msa = True
-        if report and report["has_missing_residues"]:
-            use_msa = st.checkbox(
-                "Use ColabFold MSA server (requires internet connection)",
-                value=True,
-                help="Boltz-2 uses multiple sequence alignments to improve "
-                     "prediction quality. Uncheck if you are air-gapped or "
-                     "have pre-generated MSAs."
-            )
-            st.session_state["use_msa_server"] = use_msa
 
         # ── Run Analysis button ───────────────────────────────────────────
         if st.button("▶ Run Analysis"):
@@ -212,15 +213,13 @@ if workflow_step == "1. Data Input":
                             pdb_path         = path,
                             cam_chain_id     = cam_chain,
                             peptide_chain_id = ligand_chain,
-                            use_msa_server   = st.session_state.get("use_msa_server", True),
                         )
                         st.session_state["path"] = repaired_path
 
                         strategy_labels = {
                             "none_needed":              "No repair was needed.",
                             "sidechain_only":           "Side chains rebuilt with PDBFixer.",
-                            "boltz_repair":             "Missing residues reconstructed with Boltz-2.",
-                            "missing_residues_skipped": "Missing residues detected but remodelling is currently disabled — proceeding with original coordinates.",
+                            "missing_residues_skipped": "Missing residues detected but no automatic repair is available — proceeding with original coordinates.",
                         }
                         st.success(
                             f"✅ Repair complete: {strategy_labels.get(strategy, strategy)}\n\n"
@@ -607,138 +606,105 @@ elif workflow_step == "4. Results & Analytics":
             )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 5: Mutant Prediction (NEW)
-# Predicts the structure of a user-specified mutant sequence using Boltz-2,
-# then feeds it through the full prppi → OSPREY pipeline.
+# Step 5: PyMOL Redesign
 # ═══════════════════════════════════════════════════════════════════════════════
-elif workflow_step == "5. Mutant Prediction":
-    st.header("Step 5: Mutant Sequence Structure Prediction")
+elif workflow_step == "5. PyMOL Redesign":
+    st.header("Step 5: Multi-Site Redesign (PyMOL)")
     st.markdown(
-        "Predict the 3D structure of a mutant calmodulin–peptide complex using "
-        "Boltz-2, then run it through the full pipeline."
+        "This step combines the best-scoring mutation from **each** residue "
+        "site you've scanned in Step 3 into a single structure. "
+        f"You need at least **{logic6.MIN_SITES} scanned residue sites** "
+        "in total — so please run Step 3 for **2 more** single-site "
+        "mutations beyond your first scan, then come back here."
     )
 
-    # ── Require a wildtype PDB to use as template ─────────────────────────
-    wt_pdb     = st.session_state.get("path")
-    cam_chain  = st.session_state.get("cam_chain")
-    pep_chain  = st.session_state.get("ligand_chain")
+    osprey_scripts = st.session_state.get("osprey_scripts", [])
+    pdb_for_pymol  = st.session_state.get("path", None)
 
-    if not wt_pdb or not os.path.exists(wt_pdb):
-        st.warning("⚠️ Please complete Step 1 first to provide a wildtype structure.")
+    if not osprey_scripts or not pdb_for_pymol:
+        st.warning("No OSPREY scans found yet. Please complete Step 3 first.")
         st.stop()
 
-    if not cam_chain or not pep_chain:
-        st.warning("⚠️ Chain identification not found. Please re-run Step 1.")
-        st.stop()
+    base_dir = os.path.dirname(os.path.dirname(osprey_scripts[0]))
 
-    st.info(
-        f"Wildtype structure: `{os.path.basename(wt_pdb)}`  \n"
-        f"CaM chain: **{cam_chain}** | Peptide chain: **{pep_chain}**"
-    )
+    # ── Re-aggregate current results so progress reflects any new Step 3 runs ──
+    if st.button("🔄 Check Scanned Sites"):
+        st.session_state.pop("pymol_pivot_delta", None)
 
-    # ── Extract wildtype sequences for display ────────────────────────────
-    try:
-        wt_cam_seq = logic5.extract_sequence_from_pdb(wt_pdb, cam_chain)
-        wt_pep_seq = logic5.extract_sequence_from_pdb(wt_pdb, pep_chain)
-    except Exception as e:
-        st.error(f"Could not read sequences from wildtype PDB: {e}")
-        st.stop()
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Calmodulin (CaM) Sequence**")
-        with st.expander("View wildtype CaM sequence"):
-            st.code(wt_cam_seq, language="text")
-        mutant_cam = st.text_area(
-            "Mutant CaM sequence (leave blank to keep wildtype)",
-            height=100,
-            placeholder=f"Paste mutant sequence here, or leave blank...",
-        ).strip()
-
-    with col2:
-        st.markdown("**Peptide Sequence**")
-        with st.expander("View wildtype peptide sequence"):
-            st.code(wt_pep_seq, language="text")
-        mutant_pep = st.text_area(
-            "Mutant peptide sequence (leave blank to keep wildtype)",
-            height=100,
-            placeholder=f"Paste mutant sequence here, or leave blank...",
-        ).strip()
-
-    use_msa = st.checkbox(
-        "Use ColabFold MSA server (requires internet)",
-        value=True,
-    )
-
-    st.markdown("---")
-
-    if st.button("▶ Predict Mutant Structure & Run Pipeline"):
-
-        if not mutant_cam and not mutant_pep:
-            st.error("❌ Please provide at least one mutant sequence.")
+    if "pymol_pivot_delta" not in st.session_state:
+        with st.spinner("Aggregating mutation-scan results..."):
+            pivot_delta, _pivot_annot, _summary, error = logic4.analyze_results(base_dir)
+        if error:
+            st.error(f"Analysis Error: {error}")
             st.stop()
+        st.session_state["pymol_pivot_delta"] = pivot_delta
+    else:
+        pivot_delta = st.session_state["pymol_pivot_delta"]
 
-        # Basic validation: only standard amino acids
-        valid_aa = set("ACDEFGHIKLMNPQRSTVWY")
-        for label, seq in [("CaM", mutant_cam), ("Peptide", mutant_pep)]:
-            if seq:
-                invalid = set(seq.upper()) - valid_aa
-                if invalid:
-                    st.error(
-                        f"❌ Mutant {label} sequence contains invalid characters: "
-                        f"{', '.join(sorted(invalid))}"
-                    )
-                    st.stop()
+    n_sites = 0 if pivot_delta is None else pivot_delta.shape[0]
+    st.metric("Residue Sites Scanned", n_sites, f"need {logic6.MIN_SITES}")
 
-        # ── Step A: Predict mutant complex with Boltz-2 ───────────────────
-        with st.spinner("Running Boltz-2 structure prediction (this may take 1–5 minutes)..."):
-            try:
-                mutant_pdb = logic5.predict_mutant_complex(
-                    wildtype_pdb_path        = wt_pdb,
-                    cam_chain_id             = cam_chain,
-                    peptide_chain_id         = pep_chain,
-                    mutant_cam_sequence      = mutant_cam     if mutant_cam     else None,
-                    mutant_peptide_sequence  = mutant_pep     if mutant_pep     else None,
-                    use_msa_server           = use_msa,
+    if n_sites < logic6.MIN_SITES:
+        st.warning(
+            f"Only {n_sites} residue site(s) scanned so far. "
+            f"Go to **Step 3**, pick a different residue, and run OSPREY "
+            f"for {logic6.MIN_SITES - n_sites} more site(s), then return "
+            f"here and click **Check Scanned Sites**."
+        )
+        st.stop()
+
+    # ── Preview the best mutation per site before committing to PyMOL ──────────
+    try:
+        preview_mutations = logic6.select_best_mutations(pivot_delta)
+    except ValueError as e:
+        st.error(f"❌ {e}")
+        st.stop()
+
+    st.subheader("🏆 Best Mutation Per Site")
+    st.dataframe(
+        pd.DataFrame(preview_mutations)[["site", "chain", "resnum", "wt_aa3", "mutant_aa3", "delta"]]
+          .rename(columns={
+              "site": "Site", "chain": "Chain", "resnum": "Residue #",
+              "wt_aa3": "Wild-Type", "mutant_aa3": "Best Mutation", "delta": "ΔK*",
+          }),
+        use_container_width=True, hide_index=True,
+    )
+
+    st.caption(f"Structure to be mutated: `{pdb_for_pymol}`")
+
+    if st.button("🧬 Generate Redesigned Structure in PyMOL"):
+        try:
+            with st.spinner("Running PyMOL mutagenesis..."):
+                output_path, mutations, applied, errors = logic6.generate_redesigned_structure(
+                    pdb_for_pymol, pivot_delta
                 )
-                st.success(f"✅ Mutant structure predicted: `{mutant_pdb}`")
-            except Exception as e:
-                st.error(f"❌ Boltz-2 prediction failed: {e}")
-                st.stop()
+            st.session_state["pymol_output_path"] = output_path
 
-        # ── Step B: Fix protonation ───────────────────────────────────────
-        with st.spinner("Fixing protonation..."):
-            try:
-                fixed_mutant_pdb = logic.fix_pdb_protonation(mutant_pdb)
-                st.session_state["mutant_path"] = fixed_mutant_pdb
-            except Exception as e:
-                st.error(f"❌ Protonation fix failed: {e}")
-                st.stop()
+            if applied:
+                st.success(f"✅ Applied {len(applied)} mutation(s):")
+                for a in applied:
+                    st.write(f"• {a}")
+            if errors:
+                st.warning("⚠️ Some sites could not be mutated:")
+                for err in errors:
+                    st.write(f"• {err}")
 
-        # ── Step C: Run prppi on the mutant ──────────────────────────────
-        with st.spinner("Running PRPPI on mutant structure..."):
-            try:
-                mutant_json = logic.run_prppi(fixed_mutant_pdb, cutoff=5.0)
-                if mutant_json:
-                    st.success(f"✅ PRPPI complete: `{mutant_json}`")
-                    st.session_state["mutant_json_path"] = mutant_json
-                    st.session_state["json_path"]        = mutant_json
-                    st.session_state["path"]             = fixed_mutant_pdb
+            st.success(f"Redesigned PDB saved to: `{output_path}`")
 
-                    with st.expander("🔬 View Mutant JSON"):
-                        with open(mutant_json) as f:
-                            import json as jsonlib
-                            st.json(jsonlib.load(f))
+        except ImportError as e:
+            st.error(f"❌ {e}")
+        except ValueError as e:
+            st.error(f"❌ {e}")
 
-                    st.info(
-                        "✅ Mutant JSON saved to session. "
-                        "Navigate to **Step 2** to set residue ranges, "
-                        "then **Step 3** to run OSPREY."
-                    )
-                else:
-                    st.error("❌ PRPPI did not produce a JSON file.")
-            except Exception as e:
-                st.error(f"❌ PRPPI failed: {e}")
+    output_path = st.session_state.get("pymol_output_path")
+    if output_path and os.path.exists(output_path):
+        with open(output_path, "rb") as f:
+            st.download_button(
+                label="📥 Download Redesigned PDB",
+                data=f.read(),
+                file_name=os.path.basename(output_path),
+                mime="chemical/x-pdb",
+            )
 
 
 # ── Sidebar footer ────────────────────────────────────────────────────────────

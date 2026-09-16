@@ -75,11 +75,11 @@ def read_file_data(tsv_file):
 def analyze_results(base_dir):
     """
     THIS IS THE FUNCTION CALLED BY gui.py
-    Processes all files and returns (pivot_df, summary_df, error_msg)
+    Processes all files and returns (pivot_delta, pivot_annot, summary_df, error_msg)
     """
     tsv_files_paths = get_tsv_files_paths(base_dir)
     if not tsv_files_paths:
-        return None, None, "No TSV files found in output directory."
+        return None, None, None, "No TSV files found in output directory."
 
     unique_fragments = set()
     all_rows = []
@@ -94,19 +94,43 @@ def analyze_results(base_dir):
                 all_rows.append(item)
 
     if not all_rows:
-        return None, None, "No valid data found inside TSV files."
+        return None, None, None, "No valid data found inside TSV files."
 
     # Create Master DataFrame
     master_df = pd.DataFrame(all_rows)
 
-    # DataFrame 1: The Matrix for the Bar Chart (Pivot Table)
+    # DataFrame 1: The Matrix for the Heatmap (Pivot Table)
     # This aligns different mutations (columns) against residue sites (rows)
+    # IMPORTANT: do NOT .fillna(0) here. A missing cell means this mutation
+    # was never tested at this site — that's semantically different from a
+    # mutation that WAS tested and scored an exact 0.000 delta (a true tie
+    # with wild-type). Backfilling both to 0.0 makes them indistinguishable
+    # downstream: gui.py's heatmap explicitly checks for NaN to gray out
+    # untested cells (see the "Mask NaN cells" step in the Panel A heatmap
+    # code), and logic6.select_best_mutations() relies on row.dropna() to
+    # exclude untested mutations before picking the best real one via
+    # idxmax(). Filling with 0 silently defeats both of those checks and
+    # lets an untested amino acid outrank every mutation that was actually
+    # scored, whenever all real deltas are negative.
     pivot_delta = master_df.pivot_table(
         index=['WT_Full'], 
         columns='Mutation', 
         values='Delta',
         aggfunc='first'
-    ).fillna(0).sort_index()
+    ).sort_index()
+
+    # DataFrame 1b: Annotation matrix — same shape/index/columns as pivot_delta,
+    # holding the mutation code to print inside each occupied heatmap cell.
+    # Empty string for cells with no data (so they render blank, not "nan").
+    presence = master_df.pivot_table(
+        index=['WT_Full'],
+        columns='Mutation',
+        values='Delta',
+        aggfunc='count'
+    ).reindex(index=pivot_delta.index, columns=pivot_delta.columns)
+    pivot_annot = presence.apply(
+        lambda col: col.apply(lambda n: col.name if pd.notna(n) and n > 0 else '')
+    )
 
     # DataFrame 2: The Summary Table for the UI
     # Combines mutation name and score into a readable string
@@ -115,4 +139,4 @@ def analyze_results(base_dir):
     mutation_summary = summary_df.groupby(['WT_Full'])['Label'].apply(lambda x: ', '.join(x)).reset_index()
     mutation_summary.rename(columns={'WT_Full': 'Residue Site', 'Label': 'Mutations & Log10 Scores'}, inplace=True)
 
-    return pivot_delta, mutation_summary, None
+    return pivot_delta, pivot_annot, mutation_summary, None

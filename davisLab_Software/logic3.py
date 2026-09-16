@@ -74,7 +74,68 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gp
         py_content = f'''
 
 import osprey
-osprey.start(heapSizeMiB={heap_size}, garbageSizeMiB={garbage_size})
+import os
+import shutil
+import glob
+
+def _find_system_jvm_dll():
+    """
+    Try to locate jvm.dll from a system-installed JDK/JRE.
+    Returns None if nothing suitable is found, in which case OSPREY
+    falls back to its own bundled JRE.
+
+    This is used because OSPREY's own bundled JRE can crash on some
+    newer CPUs (a known old-JVM-build compatibility issue). If the
+    user has ANY separate JDK installed (via JAVA_HOME, PATH, or a
+    common install location), we prefer that instead.
+    """
+    candidates = []
+
+    java_home = os.environ.get("JAVA_HOME")
+    if java_home:
+        candidates.append(java_home)
+
+    java_exe = shutil.which("java")
+    if java_exe:
+        bin_dir = os.path.dirname(java_exe)
+        candidates.append(os.path.dirname(bin_dir))
+
+    candidates.extend(glob.glob(r"C:\\Program Files\\Java\\jdk-*"))
+    candidates.extend(glob.glob(r"C:\\Program Files\\Eclipse Adoptium\\jdk-*"))
+
+    for root in candidates:
+        for rel in ("bin/server/jvm.dll", "bin/client/jvm.dll"):
+            path = os.path.join(root, *rel.split("/"))
+            if os.path.isfile(path):
+                return path
+
+    return None
+
+
+# Optional manual override: set an OSPREY_JRE_PATH environment variable
+# to point at a specific jvm.dll, otherwise auto-detect a system JDK.
+_jvm_path = os.environ.get("OSPREY_JRE_PATH") or _find_system_jvm_dll()
+
+if _jvm_path:
+    # osprey.start() would normally pick OSPREY's own bundled JRE, which can
+    # crash on some newer CPUs. Instead, call OSPREY's internal common-setup
+    # routine directly, overriding which JRE it boots, while still getting all
+    # the same setup osprey.start() does (classpath, the Java class factory
+    # 'c', WILD_TYPE, Forcefield, etc.) - just pointed at a working JDK.
+    osprey._start_jvm_common(lambda _ignored_default_path: osprey.jvm.start(
+        _jvm_path,
+        heapSizeMiB={heap_size},
+        enableAssertions=False,
+        stackSizeMiB=16,
+        garbageSizeMiB={garbage_size},
+        allowRemoteManagement=False,
+        attachJvmDebugger=False,
+    ))
+    if osprey._print_preamble:
+        print("Using up to {heap_size} MiB heap memory: {garbage_size} MiB for garbage, %d MiB for storage" % ({heap_size} - {garbage_size}))
+else:
+    # No system JDK found on this machine - fall back to OSPREY's bundled JRE
+    osprey.start(heapSizeMiB={heap_size}, garbageSizeMiB={garbage_size})
 
 # choose a forcefield
 ffparams = osprey.ForcefieldParams()
@@ -188,7 +249,7 @@ for scoredSequence in scoredSequences:
 '''
         # Write the .py file inside the key's folder
         py_file = os.path.join(subfolder, f'bbkstar_{file_name}_{key}.py')
-        with open(py_file, 'w') as f:
+        with open(py_file, 'w', encoding='utf-8') as f:
             f.write(py_content)
         generated_files.append(py_file)
     return generated_files
