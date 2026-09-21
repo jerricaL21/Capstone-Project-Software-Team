@@ -598,10 +598,11 @@ elif workflow_step == "5. Molecular Dynamics":
     st.header("Step 5: Molecular Dynamics — NAMD Package Generator")
 
     st.markdown("""\
-    This step generates a **ready-to-run NAMD package** for your PDB structure.
-    The portal does not execute NAMD directly (simulations take minutes to hours), but packages
-    everything your group needs — config files, Python helper scripts, and a Windows
-    launcher — so you can run it locally **without VMD**.
+    This step generates a **ready-to-run, explicit-solvent NAMD package** for your PDB structure.
+    The portal does not execute NAMD directly (simulations take hours to days on a GPU), but packages
+    everything your group needs — a solvated CHARMM PSF/PDB, a staged 4-part NAMD protocol
+    (minimize → heat → equilibrate → production), a launcher script, and MM/PBSA scaffolding —
+    so you can run it on your own GPU workstation/cluster **without VMD**.
 
     > Fig. 2B tracks the N-domain ↔ C-domain distance over time.  
     > - **wtCaM** → stays in *annealed* state (~0.5–1 nm) → normal regulation  
@@ -637,21 +638,30 @@ elif workflow_step == "5. Molecular Dynamics":
 
     # B: Parameters
     st.subheader("B. Simulation Parameters")
+    st.caption("Explicit TIP3P solvent only — matches the manuscript's GROMACS methodology. "
+               "(A previous version of this tool offered implicit GB solvent; that option was "
+               "removed because it does not reproduce the paper's setup.)")
     col1, col2 = st.columns(2)
     with col1:
-        temperature  = st.number_input("Temperature (K)", 270.0, 400.0, 310.0, step=5.0,
-                                        help="310 K = 37 °C (physiological)")
-        sim_ns       = st.number_input("Simulation length (ns)", 0.1, 500.0, 0.1, step=0.1,
-                                        help="Manuscript used ~100 ns. Start with 0.1 for testing.")
+        temperature  = st.number_input("Temperature (K)", 270.0, 400.0, 297.15, step=5.0,
+                                        help="297.15 K = 24 °C — matches the SI Appendix's MD Methods "
+                                             "(not physiological 310 K).")
+        production_ns = st.number_input("PRODUCTION stage length (ns)", 0.1, 500.0, 100.0, step=0.1,
+                                        help="SI Appendix: production run of at least 100 ns. This is "
+                                             "on top of the fixed minimize/heat/equilibration stages, "
+                                             "not instead of them.")
         timestep_fs  = float(st.selectbox("Timestep (fs)", [1.0, 2.0], index=1))
-        sim_steps    = int(sim_ns * 1_000_000 / timestep_fs)
-        st.caption(f"= **{sim_steps:,} steps**")
     with col2:
         nonbonded_cutoff = st.number_input("Non-bonded cutoff (Å)", 8.0, 20.0, 12.0, step=1.0)
         gpu_enabled      = st.checkbox("Enable CUDA GPU acceleration", value=True,
                                         help="Requires NAMD CUDA build — recommended for Windows + RTX/GTX")
-        use_implicit     = st.checkbox("Use implicit solvent (Generalized Born)", value=True,
-                                        help="Faster — no water box. Uncheck for full explicit water.")
+        padding_nm       = st.number_input("Water box padding (nm)", 0.8, 3.0, 1.0, step=0.1,
+                                        help="SI Appendix used a minimum 1.0 nm (10 Å) protein-to-box-edge "
+                                             "distance. Increase if your variant undergoes large conformational "
+                                             "excursions (e.g. RCaM1-like unlocking) to avoid self-interaction "
+                                             "across periodic images.")
+        ionic_strength   = st.number_input("Ionic strength (M KCl)", 0.0, 1.0, 0.15, step=0.05,
+                                        help="SI Appendix used KCl, not NaCl, at 0.15 M.")
         protein_chain    = st.text_input("Protein chain ID", value="A")
         ligand_chain     = st.text_input("Peptide/ligand chain ID", value="B")
 
@@ -666,26 +676,40 @@ elif workflow_step == "5. Molecular Dynamics":
         st.info("Upload or select a PDB file in section A to enable package generation.")
     else:
         st.write(f"Ready to package: **`{os.path.basename(md_pdb_path)}`**")
+        st.caption("This step solvates the structure (TIP3P + ions), builds a CHARMM PSF, and writes a "
+                   "4-stage NAMD protocol (minimize → heat → restrained NPT equilibration → unrestrained "
+                   "NPT production) plus MM/PBSA scaffolding. Solvation runs here; NAMD itself does not — "
+                   "run the generated package on your own GPU workstation/cluster.")
         if st.button("Generate NAMD Package"):
-            with st.spinner("Building configuration files..."):
+            with st.spinner("Solvating system, building PSF, and writing staged NAMD configs... this can take a minute or two."):
                 out_dir = os.path.dirname(os.path.abspath(md_pdb_path))
-                result  = logic6.generate_namd_package(
-                    pdb_path=md_pdb_path, output_dir=out_dir,
-                    sim_steps=sim_steps, temperature=temperature,
-                    timestep_fs=timestep_fs, nonbonded_cutoff=nonbonded_cutoff,
-                    gpu_enabled=gpu_enabled, use_implicit_solvent=use_implicit,
-                    protein_chain=protein_chain, ligand_chain=ligand_chain,
-                )
+                try:
+                    result = logic6.build_full_package(
+                        pdb_path=md_pdb_path, output_dir=out_dir,
+                        padding_nm=padding_nm, ionic_strength_m=ionic_strength,
+                        protein_chain=protein_chain, ligand_chain=ligand_chain,
+                        temperature=temperature, production_ns=production_ns,
+                        timestep_fs=timestep_fs, nonbonded_cutoff=nonbonded_cutoff,
+                        gpu_enabled=gpu_enabled,
+                    )
+                except ImportError as e:
+                    st.error(f"Missing dependency: {e}")
+                    st.stop()
             st.success(result["summary"])
+            if result["manifest"]["warnings"]:
+                for w in result["manifest"]["warnings"]:
+                    st.warning(w)
             st.session_state["namd_result"] = result
+            st.session_state["md_dcd_freq"] = result["namd_package"]["production_dcd_freq"]
 
-            labels = {
-                "NAMD config (.namd)":            result["config_path"],
-                "PSF generator (generate_psf.py)": result["tcl_path"],
-                "Analysis script (analyze_distance.py)": result["analysis_path"],
-                "Windows batch launcher":          result["bat_path"],
-                "README":                          result["readme_path"],
-            }
+            namd_dir = result["namd_package"]["namd_dir"]
+            labels = {"README": result["namd_package"]["readme_path"]}
+            for stage in result["namd_package"]["stages"]:
+                labels[f"NAMD config: {stage}"] = os.path.join(namd_dir, stage)
+            labels["Analysis script (analyze_distance.py)"] = result["namd_package"]["analysis_path"]
+            labels["Launcher (run_all_stages.sh)"] = result["namd_package"]["launcher_path"]
+            labels["MM/PBSA README"] = os.path.join(result["mmpbsa"]["mmpbsa_dir"], "README.txt")
+
             for label, fpath in labels.items():
                 with st.expander(f"View: {label}"):
                     with open(fpath) as fh:
@@ -721,7 +745,8 @@ elif workflow_step == "5. Molecular Dynamics":
         else:
             df = pd.DataFrame(rows)
             ts = st.session_state.get("md_timestep_fs", 2.0)
-            df["time_ns"] = df["frame"] * 1000 * ts / 1_000_000
+            dcd_freq = st.session_state.get("md_dcd_freq", 5000)  # falls back to this session's default if package wasn't generated in this run
+            df["time_ns"] = df["frame"] * dcd_freq * ts / 1_000_000
 
             traj_label = st.text_input("Trajectory label (e.g. wtCaM, RCaM1, RCaM2)", value="My CaM")
 
