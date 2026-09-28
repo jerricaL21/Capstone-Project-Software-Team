@@ -22,6 +22,7 @@ import logic3
 import logic4
 import logic5
 import logic6
+import logic7
 
 importlib.reload(logic)
 importlib.reload(logic2)
@@ -29,6 +30,7 @@ importlib.reload(logic3)
 importlib.reload(logic4)
 importlib.reload(logic5)
 importlib.reload(logic6)
+importlib.reload(logic7)
 
 # Used in Step 3 to figure out which three-letter amino acid code corresponds to wild-type residue code
 AA_1TO3 = {
@@ -50,7 +52,7 @@ st.markdown("""
 
 st.sidebar.header("Pipeline Controls")
 workflow_step = st.sidebar.radio("Navigate Workflow", 
-    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. PyMOL Redesign"])
+    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. PyMOL Redesign", "6. Molecular Dynamics"])
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 1: Data Input
@@ -705,6 +707,223 @@ elif workflow_step == "5. PyMOL Redesign":
                 file_name=os.path.basename(output_path),
                 mime="chemical/x-pdb",
             )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Step 6: Molecular Dynamics
+# ═══════════════════════════════════════════════════════════════════════════════
+elif workflow_step == "6. Molecular Dynamics":
+    st.header("Step 6: Molecular Dynamics — NAMD Package Generator")
+
+    st.markdown("""\
+    This step generates a **ready-to-run, explicit-solvent NAMD package** for your PDB structure.
+    The portal does not execute NAMD directly (simulations take hours to days on a GPU), but packages
+    everything your group needs — a solvated CHARMM PSF/PDB, a staged 4-part NAMD protocol
+    (minimize → heat → equilibrate → production), a launcher script, and MM/PBSA scaffolding —
+    so you can run it on your own GPU workstation/cluster **without VMD**.
+
+    > Fig. 2B tracks the N-domain ↔ C-domain distance over time.  
+    > - **wtCaM** → stays in *annealed* state (~0.5–1 nm) → normal regulation  
+    > - **RCaM1** → unlocks (~1.5–3 nm), bends RyR2 peptide → Ca²⁺ leak ↑  
+    > - **RCaM2** → stays locked and annealed → Ca²⁺ leak ↓ (therapeutic goal)
+    """)
+
+    st.divider()
+
+    # A: PDB source (PATH FIX: Checks Step 5 output first, falls back to Step 1)
+    st.subheader("A. Structure Source")
+    pdb_from_session = st.session_state.get("pymol_output_path") or st.session_state.get("path", None)
+    md_pdb_path = None
+
+    if pdb_from_session and os.path.exists(pdb_from_session):
+        source_label = "Step 5 (PyMOL Redesign)" if pdb_from_session == st.session_state.get("pymol_output_path") else "Step 1"
+        use_session = st.checkbox(
+            f"Use PDB from {source_label}: `{os.path.basename(pdb_from_session)}`", value=True)
+        if use_session:
+            md_pdb_path = pdb_from_session
+    else:
+        use_session = False
+
+    if not use_session or md_pdb_path is None:
+        uploaded_md_pdb = st.file_uploader("Upload PDB file for MD", type=["pdb"], key="md_pdb")
+        if uploaded_md_pdb:
+            os.makedirs("uploaded_pdbs", exist_ok=True)
+            md_pdb_path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_md_pdb.name))
+            with open(md_pdb_path, "wb") as fh:
+                fh.write(uploaded_md_pdb.getvalue())
+            st.success(f"Uploaded: `{md_pdb_path}`")
+    st.divider()
+
+    # B: Parameters
+    st.subheader("B. Simulation Parameters")
+    st.caption("Explicit TIP3P solvent only — matches the manuscript's GROMACS methodology. "
+               "(A previous version of this tool offered implicit GB solvent; that option was "
+               "removed because it does not reproduce the paper's setup.)")
+    col1, col2 = st.columns(2)
+    with col1:
+        temperature  = st.number_input("Temperature (K)", 270.0, 400.0, 297.15, step=5.0,
+                                        help="297.15 K = 24 °C — matches the SI Appendix's MD Methods "
+                                             "(not physiological 310 K).")
+        production_ns = st.number_input("PRODUCTION stage length (ns)", 0.1, 500.0, 100.0, step=0.1,
+                                        help="SI Appendix: production run of at least 100 ns. This is "
+                                             "on top of the fixed minimize/heat/equilibration stages, "
+                                             "not instead of them.")
+        timestep_fs  = float(st.selectbox("Timestep (fs)", [1.0, 2.0], index=1))
+    with col2:
+        nonbonded_cutoff = st.number_input("Non-bonded cutoff (Å)", 8.0, 20.0, 12.0, step=1.0)
+        gpu_enabled      = st.checkbox("Enable CUDA GPU acceleration", value=True,
+                                        help="Requires NAMD CUDA build — recommended for Windows + RTX/GTX")
+        padding_nm       = st.number_input("Water box padding (nm)", 0.8, 3.0, 1.0, step=0.1,
+                                        help="SI Appendix used a minimum 1.0 nm (10 Å) protein-to-box-edge "
+                                             "distance. Increase if your variant undergoes large conformational "
+                                             "excursions (e.g. RCaM1-like unlocking) to avoid self-interaction "
+                                             "across periodic images.")
+        ionic_strength   = st.number_input("Ionic strength (M KCl)", 0.0, 1.0, 0.15, step=0.05,
+                                        help="SI Appendix used KCl, not NaCl, at 0.15 M.")
+        protein_chain    = st.text_input("Protein chain ID", value="A")
+        ligand_chain     = st.text_input("Peptide/ligand chain ID", value="B")
+
+    st.session_state["md_timestep_fs"] = timestep_fs
+
+    st.divider()
+
+    # C: Generate (PATH & EXECUTION ROUTING FIX: Routes directly via logic7)
+    st.subheader("C. Generate NAMD Package")
+
+    if md_pdb_path is None:
+        st.info("Upload or select a PDB file in section A to enable package generation.")
+    else:
+        st.write(f"Ready to package: **`{os.path.basename(md_pdb_path)}`**")
+        st.caption("This step solvates the structure (TIP3P + ions), builds a CHARMM PSF, and writes a "
+                   "4-stage NAMD protocol (minimize → heat → restrained NPT equilibration → unrestrained "
+                   "NPT production) plus MM/PBSA scaffolding. Solvation runs here; NAMD itself does not — "
+                   "run the generated package on your own GPU workstation/cluster.")
+        if st.button("Generate NAMD Package"):
+            with st.spinner("Solvating system, building PSF, and writing staged NAMD configs... this can take a minute or two."):
+                out_dir = os.path.dirname(os.path.abspath(md_pdb_path))
+                try:
+                    # Routing execution to teammates' logic7
+                    md_func = getattr(logic7, "run_md_pipeline_from_pymol", None) or getattr(logic7, "build_full_package", None)
+                    if md_func is None:
+                        raise AttributeError("Neither 'run_md_pipeline_from_pymol' nor 'build_full_package' was found in logic7.py")
+
+                    result = md_func(
+                        pdb_path=md_pdb_path, output_dir=out_dir,
+                        padding_nm=padding_nm, ionic_strength_m=ionic_strength,
+                        protein_chain=protein_chain, ligand_chain=ligand_chain,
+                        temperature=temperature, production_ns=production_ns,
+                        timestep_fs=timestep_fs, nonbonded_cutoff=nonbonded_cutoff,
+                        gpu_enabled=gpu_enabled,
+                    )
+                except Exception as e:
+                    st.error(f"MD packaging failed: {e}")
+                    st.stop()
+            st.success(result["summary"])
+            if result.get("manifest", {}).get("warnings"):
+                for w in result["manifest"]["warnings"]:
+                    st.warning(w)
+            st.session_state["namd_result"] = result
+            st.session_state["md_dcd_freq"] = result.get("namd_package", {}).get("production_dcd_freq", 5000)
+
+            namd_dir = result["namd_package"]["namd_dir"]
+            labels = {"README": result["namd_package"]["readme_path"]}
+            for stage in result["namd_package"]["stages"]:
+                labels[f"NAMD config: {stage}"] = os.path.join(namd_dir, stage)
+            labels["Analysis script (analyze_distance.py)"] = result["namd_package"]["analysis_path"]
+            labels["Launcher (run_all_stages.sh)"] = result["namd_package"]["launcher_path"]
+            labels["MM/PBSA README"] = os.path.join(result["mmpbsa"]["mmpbsa_dir"], "README.txt")
+
+            for label, fpath in labels.items():
+                if os.path.exists(fpath):
+                    with st.expander(f"View: {label}"):
+                        with open(fpath) as fh:
+                            st.code(fh.read(), language="bash")
+
+            st.divider()
+            if "zip_path" in result and os.path.exists(result["zip_path"]):
+                with open(result["zip_path"], "rb") as zf:
+                    st.download_button(
+                        label="Download complete NAMD package (.zip)",
+                        data=zf.read(),
+                        file_name=os.path.basename(result["zip_path"]),
+                        mime="application/zip",
+                    )
+
+    st.divider()
+
+    # D: Upload & plot MD results
+    st.subheader("D. Visualise MD Results — N/C Domain Distance")
+    st.markdown("""\
+    After running NAMD and the `analyze_distance.py` script, upload `domain_distance.dat`
+    to plot the N-domain / C-domain distance over time (replicates manuscript Fig. 2B).
+    """)
+
+    dat_file = st.file_uploader("Upload domain_distance.dat", type=["dat","txt","csv"], key="dat_upload")
+    if dat_file:
+        import matplotlib.pyplot as plt
+
+        dat_text = dat_file.read().decode("utf-8")
+        rows     = logic6.parse_domain_distance_dat(dat_text)
+
+        if not rows:
+            st.error("Could not parse the file. Expected two columns: frame and distance (nm).")
+        else:
+            df = pd.DataFrame(rows)
+            ts = st.session_state.get("md_timestep_fs", 2.0)
+            dcd_freq = st.session_state.get("md_dcd_freq", 5000)  # falls back to this session's default if package wasn't generated in this run
+            df["time_ns"] = df["frame"] * dcd_freq * ts / 1_000_000
+
+            traj_label = st.text_input("Trajectory label (e.g. wtCaM, RCaM1, RCaM2)", value="My CaM")
+
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(df["time_ns"], df["distance_nm"], linewidth=1.0,
+                    label=traj_label, color="#6a0dad")
+            ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8,
+                       label="Annealed threshold (~1 nm)")
+            ax.set_xlabel("Time (ns)", fontsize=11)
+            ax.set_ylabel("N-C Domain Distance (nm)", fontsize=11)
+            ax.set_title("CaM N-domain / C-domain Distance Over Time", fontsize=12)
+            ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+            fig.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Mean distance", f"{df['distance_nm'].mean():.2f} nm")
+            c2.metric("Min distance",  f"{df['distance_nm'].min():.2f} nm")
+            c3.metric("Max distance",  f"{df['distance_nm'].max():.2f} nm")
+
+            annealed_pct = (df["distance_nm"] < 1.0).mean() * 100
+            st.caption(
+                f"Fraction of frames in annealed state (<1 nm): **{annealed_pct:.1f}%**  "
+                "(wtCaM/RCaM2 ≈ high, RCaM1 ≈ low)"
+            )
+
+    st.divider()
+
+    with st.expander("Quick-Start Reference — NAMD on Windows (no VMD needed)"):
+        st.markdown("""\
+**Required software (all free)**
+- [NAMD 2.14 multicore](https://www.ks.uiuc.edu/Research/namd/) — Win64, no GPU version works fine
+- [CHARMM36 force field](http://mackerell.umaryland.edu/charmm_ff.shtml) — `toppar_c36_jul22.tgz`
+- parmed + MDAnalysis — `pip install parmed MDAnalysis`
+
+**Steps after downloading the .zip**
+1. Extract the zip. Copy your PDB into the folder. Copy `top_all36_prot.rtf` and `par_all36_prot.prm` from the CHARMM36 download into the same folder.
+2. Generate the topology (replaces VMD psfgen):
+   `python generate_psf.py`
+3. Edit the `.namd` file — change `coordinates` to point to `{pdb_name}_prep.pdb`
+4. Launch NAMD:
+   `namd2.exe +p4 {pdb_name}.namd > {pdb_name}_md.log`
+5. After simulation, compute the domain distance:
+   `python analyze_distance.py`
+6. Upload `domain_distance.dat` to section D above.
+
+**Interpreting the distance plot**
+
+| CaM variant | Distance behavior | Biological meaning |
+|-------------|-------------------|-------------------|
+| wtCaM | Stays low (<1 nm), "annealed" | Normal RyR2 regulation |
+| RCaM1 | Rises high (>1.5 nm), "unlocked" | Bends RyR2 peptide → Ca²⁺ leak ↑ |
+| RCaM2 | Stays low, "locked annealed" | High affinity + straight peptide → Ca²⁺ leak ↓ |
+        """)
 
 
 # ── Sidebar footer ────────────────────────────────────────────────────────────
