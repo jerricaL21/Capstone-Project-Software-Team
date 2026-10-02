@@ -52,7 +52,19 @@ st.markdown("""
 
 st.sidebar.header("Pipeline Controls")
 workflow_step = st.sidebar.radio("Navigate Workflow", 
-    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. PyMOL Redesign", "6. Molecular Dynamics"])
+    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. PyMOL Redesign", "6. Molecular Dynamics"],
+    key="workflow_step")
+
+# ── "Next step" button shown at the bottom of each page ──────────────────────
+def _go_to_step(target):
+    st.session_state["workflow_step"] = target
+
+def next_step_button(target, label, ready = True):
+    if not ready:
+        return
+    st.markdown("---")
+    st.button(f"{label}  ➡️", key=f"next_to_{target}", on_click=_go_to_step,
+              args=(target,), type="primary", use_container_width=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 1: Data Input
@@ -80,7 +92,6 @@ if workflow_step == "1. Data Input":
         with st.expander("📄 View PDB File Header"):
             st.code(pdb_bytes[:500] + "...", language="text")
         
-        st.warning("Note: To view the 3D structure, you will need to install 'stmol'.")
 
         # ── Chain identification — only runs once per uploaded file ───────
         already_identified = (
@@ -110,29 +121,24 @@ if workflow_step == "1. Data Input":
             for chain_id, info in chain_results.items():
                 if info["is_calmodulin"]:
                     cam_chain = chain_id
-                    st.success(
-                        f"Chain **{chain_id}** → CALMODULIN "
-                        f"({info['identity']}% identity to human CaM, {info['length']} residues)"
-                    )
+                    if info.get("identity") is not None:
+                        identity_msg = f" ({info['identity']}% identity to human CaM, {info['length']} residues)"
+                    else:
+                        identity_msg = f" ({info['length']} residues)"
+                    st.success(f"Chain **{chain_id}** → CALMODULIN{identity_msg}")
                 else:
                     ligand_chain = chain_id
                     st.info(
                         f"Chain **{chain_id}** → Ligand / peptide "
-                        f"({info['identity']}% identity to human CaM, {info['length']} residues)"
+                        f"({info['length']} residues)"
                     )
 
-            if not cam_chain:
-                st.warning(
-                    "⚠️ No chain matched calmodulin (≥80% identity). "
-                    "Proceed to Step 2 and enter residue ranges manually."
-                )
-
+            # Save so the Run Analysis button (next rerun) can read them
             st.session_state["cam_chain"]    = cam_chain
             st.session_state["ligand_chain"] = ligand_chain
 
         # ── PDB Inspection (NEW) ──────────────────────────────────────────
-        # Runs logic5.inspect_pdb() and shows the user what problems were
-        # found before the repair step.
+        # Runs logic5.inspect_pdb() and shows the user what problems were found before the repair step.
         already_inspected = (
             "inspection_report" in st.session_state and
             st.session_state.get("inspected_for") == uploaded_pdb.name
@@ -247,6 +253,9 @@ if workflow_step == "1. Data Input":
             if json_path:
                 st.success(f"Analysis complete! Results saved to: {json_path}")
                 st.session_state["json_path"] = json_path
+                st.session_state["step1_done_for"] = uploaded_pdb.name   
+                st.session_state.pop("step2_done", None)                 
+                st.session_state.pop("step3_done", None)
 
                 with st.expander("🔬 View JSON Contents"):
                     with open(json_path) as f:
@@ -254,7 +263,8 @@ if workflow_step == "1. Data Input":
                         json_data = jsonlib.load(f)
                     st.json(json_data)
 
-
+    next_step_button("2. JSON Processing", "Click to head to JSON Processing", 
+                     ready = (uploaded_pdb is not None and st.session_state.get("step1_done_for") == uploaded_pdb.name))
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 2: JSON Processing  (unchanged)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -381,8 +391,10 @@ elif workflow_step == "2. JSON Processing":
             else:
                 for json_file in json_paths:
                     logic2.add_variables_to_json(json_file, mutant_start, mutant_end, ligand_start, ligand_end)
-                st.success("All JSON files processed! Proceed to Step 3.")
+                st.success("All JSON files processed!")
+                st.session_state["step2_done"] = True
 
+    next_step_button("3. OSPREY Execution", "Click to head to OSPREY Execution", ready=st.session_state.get("step2_done", False))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 3: OSPREY Execution  (unchanged)
@@ -429,6 +441,7 @@ elif workflow_step == "3. OSPREY Execution":
         garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, 8192)
 
     if st.button("Generate & Run OSPREY Script"):
+        st.session_state["step3_done"] = False 
 
         #-------At least one amino acid must be selected----#
         if not mutations:
@@ -465,11 +478,15 @@ elif workflow_step == "3. OSPREY Execution":
                     if r["stdout"]:
                         with st.expander("View output"):
                             st.code(r["stdout"])
-
+            st.session_state["step3_done"] = all(
+                ("error" not in r) and r["returncode"] == 0 for r in run_results
+            )    
+                 
         except ValueError as e:
             st.error(f"❌ Setup error: {e}")
             st.stop()
 
+    next_step_button("4. Results & Analytics", "Click to head to Results & Analytics", ready=st.session_state.get("step3_done", False))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 4: Results & Analytics  (unchanged)
@@ -479,6 +496,7 @@ elif workflow_step == "4. Results & Analytics":
     st.header("Step 4: Redesign Results")
 
     osprey_scripts = st.session_state.get("osprey_scripts", [])
+    results_shown = False
 
     if not osprey_scripts:
         st.warning("No OSPREY scripts found. Please complete Step 3 first.")
@@ -606,18 +624,17 @@ elif workflow_step == "4. Results & Analytics":
                 file_name="osprey_redesign_results.csv",
                 mime="text/csv",
             )
+            results_shown = True
 
+    next_step_button("5. PyMOL Redesign", "Click to head to PyMOL Redesign", ready=results_shown)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 5: PyMOL Redesign
 # ═══════════════════════════════════════════════════════════════════════════════
 elif workflow_step == "5. PyMOL Redesign":
     st.header("Step 5: Multi-Site Redesign (PyMOL)")
     st.markdown(
-        "This step combines the best-scoring mutation from **each** residue "
-        "site you've scanned in Step 3 into a single structure. "
-        f"You need at least **{logic6.MIN_SITES} scanned residue sites** "
-        "in total — so please run Step 3 for **2 more** single-site "
-        "mutations beyond your first scan, then come back here."
+        "This step combines the best-scoring mutation from **selected** residue "
+        "sites you've scanned in Step 3 into a single structure."
     )
 
     osprey_scripts = st.session_state.get("osprey_scripts", [])
@@ -629,7 +646,6 @@ elif workflow_step == "5. PyMOL Redesign":
 
     base_dir = os.path.dirname(os.path.dirname(osprey_scripts[0]))
 
-    # ── Re-aggregate current results so progress reflects any new Step 3 runs ──
     if st.button("🔄 Check Scanned Sites"):
         st.session_state.pop("pymol_pivot_delta", None)
 
@@ -643,26 +659,33 @@ elif workflow_step == "5. PyMOL Redesign":
     else:
         pivot_delta = st.session_state["pymol_pivot_delta"]
 
-    n_sites = 0 if pivot_delta is None else pivot_delta.shape[0]
-    st.metric("Residue Sites Scanned", n_sites, f"need {logic6.MIN_SITES}")
-
-    if n_sites < logic6.MIN_SITES:
-        st.warning(
-            f"Only {n_sites} residue site(s) scanned so far. "
-            f"Go to **Step 3**, pick a different residue, and run OSPREY "
-            f"for {logic6.MIN_SITES - n_sites} more site(s), then return "
-            f"here and click **Check Scanned Sites**."
-        )
+    if pivot_delta is None or pivot_delta.empty:
+        st.warning("No residue sites found in analysis results. Run Step 3 first.")
         st.stop()
 
-    # ── Preview the best mutation per site before committing to PyMOL ──────────
+    available_sites = list(pivot_delta.index)
+
+    # ── Allow user to pick specific residue sites via multiselect ─────────────
+    st.subheader("🎯 Select Residues to Include")
+    selected_sites = st.multiselect(
+        "Choose specific residue sites to send to PyMOL:",
+        options=available_sites,
+        default=available_sites,  # Defaults to selecting all available sites
+        help="Select one or more residue sites to mutate."
+    )
+
+    if not selected_sites:
+        st.info("Please select at least one residue site above to proceed.")
+        st.stop()
+
+    # ── Preview the best mutation per selected site ───────────────────────────
     try:
-        preview_mutations = logic6.select_best_mutations(pivot_delta)
+        preview_mutations = logic6.select_best_mutations(pivot_delta, selected_sites=selected_sites)
     except ValueError as e:
         st.error(f"❌ {e}")
         st.stop()
 
-    st.subheader("🏆 Best Mutation Per Site")
+    st.subheader(f"🏆 Best Mutation for {len(preview_mutations)} Selected Site(s)")
     st.dataframe(
         pd.DataFrame(preview_mutations)[["site", "chain", "resnum", "wt_aa3", "mutant_aa3", "delta"]]
           .rename(columns={
@@ -678,7 +701,7 @@ elif workflow_step == "5. PyMOL Redesign":
         try:
             with st.spinner("Running PyMOL mutagenesis..."):
                 output_path, mutations, applied, errors = logic6.generate_redesigned_structure(
-                    pdb_for_pymol, pivot_delta
+                    pdb_for_pymol, pivot_delta, selected_sites=selected_sites
                 )
             st.session_state["pymol_output_path"] = output_path
 
@@ -707,7 +730,8 @@ elif workflow_step == "5. PyMOL Redesign":
                 file_name=os.path.basename(output_path),
                 mime="chemical/x-pdb",
             )
-
+    next_step_button("6. Molecular Dynamics", "Click to head to Molecular Dynamics (NAMD)",
+                     ready=bool(output_path and os.path.exists(output_path)))
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 6: Molecular Dynamics
 # ═══════════════════════════════════════════════════════════════════════════════

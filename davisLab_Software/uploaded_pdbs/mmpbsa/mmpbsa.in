@@ -1,0 +1,9 @@
+Single-trajectory GB binding free energy (analogue of the paper's
+GROMACS g_mmpbsa calculation)
+&general
+   startframe=1, endframe=9999999, interval=1,
+   strip_mask=:WAT,Na+,Cl-,          # verify these names in complex.prmtop first
+/
+&gb
+   igb=5, saltcon=0.150,
+/

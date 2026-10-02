@@ -1,0 +1,59 @@
+# =====================================================================
+# NAMD Configuration — Stage 4/4: unrestrained NPT production
+# Structure : 6Y4O_sidechain_fixed_fixed_pymol_redesigned   (explicit TIP3P solvent, CHARMM36)
+# =====================================================================
+structure            6Y4O_sidechain_fixed_fixed_pymol_redesigned_solvated.psf
+parameters           par_all36_prot.prm
+parameters           par_all36_cgenff.prm
+parameters           toppar_water_ions.str
+paratypecharmm       on
+
+wrapAll              on
+wrapWater            on
+cellBasisVector1     68.760   0.000   0.000
+cellBasisVector2     0.000   68.760   0.000
+cellBasisVector3     0.000   0.000   68.760
+cellOrigin           0.000   0.000   0.000
+
+exclude              scaled1-4
+1-4scaling           1.0
+cutoff               12.0
+switching            on
+switchdist           10.0
+pairlistdist         13.5
+PME                  yes
+PMEGridSpacing       1.0
+
+rigidBonds           all
+nonbondedFreq        1
+fullElectFrequency   2
+timestep             2.0
+
+CUDASOAintegrate        on
+
+bincoordinates        03_equil.coor
+binvelocities         03_equil.vel
+extendedSystem        03_equil.xsc
+
+langevin              on
+langevinDamping       1
+langevinTemp          297.15
+langevinHydrogen      off
+
+useGroupPressure      yes
+useFlexibleCell       no
+useConstantArea       no
+langevinPiston        on
+langevinPistonTarget  1.0
+langevinPistonPeriod  100
+langevinPistonDecay   50
+langevinPistonTemp    297.15
+
+outputName            04_production
+dcdfile               04_production.dcd
+dcdFreq               5000
+outputEnergies        1000
+outputPressure        1000
+restartFreq           25000
+firsttimestep         275000
+run                   50000000

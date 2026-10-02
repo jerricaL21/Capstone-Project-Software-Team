@@ -8,6 +8,50 @@ from io import StringIO
 from Bio import PDB, SeqIO
 from Bio.Align import PairwiseAligner
 
+def parse_pdb_compnd_header(pdb_path):
+    """
+    Parses COMPND header records in the PDB file to match MOLECULE names with CHAIN IDs.
+    Looks for Calmodulin / CaM vs RyR / Ligand keywords.
+    """
+    compnd_data = {}
+    current_mol = None
+    
+    with open(pdb_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            if line.startswith("COMPND"):
+                content = line[10:].strip()
+                tokens = content.split(";")
+                for token in tokens:
+                    token = token.strip()
+                    if not token:
+                        continue
+                    if token.startswith("MOL_ID:"):
+                        current_mol = token.split(":")[-1].strip()
+                        if current_mol not in compnd_data:
+                            compnd_data[current_mol] = {"molecule": "", "chains": []}
+                    elif token.startswith("MOLECULE:") and current_mol:
+                        compnd_data[current_mol]["molecule"] += " " + token.split(":")[-1].strip()
+                    elif token.startswith("CHAIN:") and current_mol:
+                        chains_str = token.split(":")[-1].strip()
+                        # Chains can be listed as "A", "A, B", etc.
+                        chains = [c.strip() for c in chains_str.split(",")]
+                        compnd_data[current_mol]["chains"].extend(chains)
+            # Stop parsing once ATOM records start to save time
+            elif line.startswith("ATOM") or line.startswith("HETATM"):
+                break
+
+    header_results = {}
+    for mol_id, info in compnd_data.items():
+        mol_name = info["molecule"].upper()
+        for chain in info["chains"]:
+            is_cam = "CALMODULIN" in mol_name or "CAM" in mol_name
+            header_results[chain] = {
+                "molecule_name": info["molecule"].strip(),
+                "is_calmodulin": is_cam
+            }
+            
+    return header_results
+
 def identify_calmodulin_chain(pdb_path):
 
     # ── Convert PDB to FASTA using SeqIO pdb-atom parser ─────────────────────
@@ -23,7 +67,25 @@ def identify_calmodulin_chain(pdb_path):
         if seq:
             chain_seqs[chain_id] = seq  # remove unknown residues
 
-    # ── Fetch calmodulin reference from UniProt in FASTA format (P0DP23 = human CaM-1) ───────
+    # ── Step A: Try header (COMPND) parsing first ────────────────────────────
+    try:
+        header_info = parse_pdb_compnd_header(pdb_path)
+        # Verify that header parsing found chains and identified at least one Calmodulin
+        if header_info and any(data["is_calmodulin"] for data in header_info.values()):
+            results = {}
+            for chain_id, seq in chain_seqs.items():
+                is_cam = header_info.get(chain_id, {}).get("is_calmodulin", False)
+                results[chain_id] = {
+                    "sequence": seq,
+                    "length": len(seq),
+                    "identity": None, # Header match only: no alignment to human CaM was performed
+                    "is_calmodulin": is_cam
+                }
+            return results
+    except Exception as e:
+        print(f"Header parsing failed or incomplete: {e}. Falling back to sequence alignment.")
+
+    # ── Step B: Fallback to original sequence alignment against UniProt: Fetch calmodulin reference from UniProt in FASTA format (P0DP23 = human CaM-1) ───────
     url = "https://rest.uniprot.org/uniprotkb/P0DP23.fasta"
     response = requests.get(url, timeout=15)
     if not response.ok:
