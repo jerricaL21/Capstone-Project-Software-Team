@@ -157,15 +157,35 @@ def get_chains(pdb_path):
     return chains
 
 
-def run_prppi(pdb_path, cutoff=5.0, groups=None):
+def run_prppi(pdb_path, cutoff=5.0, groups=None, cam_info=None):
     chains = get_chains(pdb_path)
     print(f"Detected chains: {chains}")
 
     if len(chains) < 2:
         raise ValueError(f"PDB file needs at least 2 chains, only found: {chains}")
 
-    side_1 = chains[0]
-    side_2 = chains[1]
+    # Default: file order (old behavior)
+    side_1, side_2 = chains[0], chains[1]
+
+    # Use CaM identification (from identify_calmodulin_chain) if provided
+    if cam_info:
+        cam_chains = [c for c in chains if cam_info.get(c, {}).get("is_calmodulin")]
+        other_chains = [c for c in chains if c in cam_info and not cam_info[c]["is_calmodulin"]]
+
+        if len(cam_chains) > 1:
+            # Loose header match flagged several chains: keep the best one as CaM
+            def rank(c):
+                ident = cam_info[c].get("identity")
+                return (ident if ident is not None else -1, cam_info[c]["length"])
+            best = max(cam_chains, key=rank)
+            other_chains = [c for c in cam_chains if c != best] + other_chains
+            cam_chains = [best]
+
+        if len(cam_chains) == 1 and other_chains:
+            side_1, side_2 = cam_chains[0], other_chains[0]
+        else:
+            print("Could not resolve CaM/partner chains; falling back to file order.")
+
     print(f"Using side_1={side_1}, side_2={side_2}")
 
     cmd = [

@@ -185,18 +185,15 @@ if workflow_step == "1. Data Input":
                     st.success("✅ All side chains complete")
 
             # Describe what repair strategy will be used
-            if report["has_missing_residues"]:
-                st.warning(
-                    "⚠️ **Missing residues detected.** No automatic repair is "
-                    "currently available for missing residues — the pipeline "
-                    "will proceed with the original coordinates. "
-                    "Side chains will still be repaired if needed."
-                )
-            elif report["has_missing_sidechains"]:
-                st.info(
-                    "🔧 **Repair strategy: PDBFixer** — Only side-chain atoms "
-                    "are missing. Fast in-process repair, no GPU needed."
-                )
+            if report["has_missing_residues"] or report["has_missing_sidechains"]:
+                msg = "🔧 **Repair strategy: PDBFixer + PyMOL rotamer selection.** "
+                if report["has_missing_residues"]:
+                    msg += ("Missing internal residues will be rebuilt. "
+                            "Rebuilt loop coordinates are approximate, so treat contacts there with caution. ")
+                if report["has_missing_sidechains"]:
+                    msg += "Incomplete side chains will be completed. "
+                msg += "PyMOL then picks the lowest-clash rotamer for each rebuilt residue."
+                st.warning(msg)
             else:
                 st.success("✅ PDB is complete — no repair needed before analysis.")
 
@@ -215,24 +212,28 @@ if workflow_step == "1. Data Input":
                     )
                     st.stop()
 
-                with st.spinner("Repairing PDB structure..."):
+                with st.spinner("Repairing PDB structure (PDBFixer + PyMOL)..."):
                     try:
-                        repaired_path, strategy = logic5.prepare_pdb(
+                        repaired_path, strategy, rebuilt = logic5.prepare_pdb(
                             pdb_path         = path,
                             cam_chain_id     = cam_chain,
                             peptide_chain_id = ligand_chain,
+                            return_details   = True,
                         )
                         st.session_state["path"] = repaired_path
 
                         strategy_labels = {
-                            "none_needed":              "No repair was needed.",
-                            "sidechain_only":           "Side chains rebuilt with PDBFixer.",
-                            "missing_residues_skipped": "Missing residues detected but no automatic repair is available — proceeding with original coordinates.",
+                            "none_needed":                   "No repair was needed.",
+                            "sidechain_rotamer_optimized":   "Side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
+                            "rebuilt_and_rotamer_optimized": "Missing residues and side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
                         }
                         st.success(
                             f"✅ Repair complete: {strategy_labels.get(strategy, strategy)}\n\n"
                             f"Repaired file: `{repaired_path}`"
                         )
+                        if rebuilt:
+                            with st.expander(f"View {len(rebuilt)} rebuilt / rotamer-optimized residues"):
+                                st.text(", ".join(f"{c}{r}" for c, r in rebuilt))
                         path = repaired_path
 
                     except Exception as e:
@@ -248,7 +249,10 @@ if workflow_step == "1. Data Input":
 
             # Step C: Run prppi (existing logic.py step)
             with st.spinner("Running PRPPI analysis..."):
-                json_path = logic.run_prppi(fixed_pdb, cutoff=5.0)
+                json_path = logic.run_prppi(
+                    fixed_pdb, cutoff=5.0,
+                    cam_info=st.session_state.get("chain_results"),
+                )
 
             if json_path:
                 st.success(f"Analysis complete! Results saved to: {json_path}")
@@ -418,7 +422,7 @@ elif workflow_step == "3. OSPREY Execution":
     with col1:
         st.subheader("Design Site")
         target_res = st.selectbox("Select Residue to Mutate", residues)
-        all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'PRO', 'SER', 'THR']
+        all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR']
         wt_letter = target_res[-1].upper() if target_res else None
         wt_three_letter = AA_1TO3.get(wt_letter)
         if wt_three_letter:

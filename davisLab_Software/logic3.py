@@ -68,8 +68,8 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gp
             # The count is the number of mutations + 1 for the WILD_TYPE
             num_seqs = len(amino_acids) + 1
         else:
-            aa_string = "'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'PRO', 'SER', 'THR'"
-            # There are 10 amino acids above + 1 for the WILD_TYPE
+            aa_string = "'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR'"
+            # There are 18 amino acids above + 1 for the WILD_TYPE
             num_seqs = 11
         py_content = f'''
 
