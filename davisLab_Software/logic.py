@@ -2,11 +2,13 @@ import subprocess
 import json
 import glob
 import os
+import re
 import time
 import requests
 from io import StringIO
 from Bio import PDB, SeqIO
 from Bio.Align import PairwiseAligner
+
 
 def parse_pdb_compnd_header(pdb_path):
     """
@@ -15,41 +17,52 @@ def parse_pdb_compnd_header(pdb_path):
     """
     compnd_data = {}
     current_mol = None
-    
+
+    # Read the WHOLE COMPND header first and join the lines into one string.
+    # Names can wrap across lines (e.g. "...TYPE II ALPHA" / "CHAIN;"), so
+    # splitting line by line would cut a molecule name in half.
+    compnd_lines = []
     with open(pdb_path, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             if line.startswith("COMPND"):
-                content = line[10:].strip()
-                tokens = content.split(";")
-                for token in tokens:
-                    token = token.strip()
-                    if not token:
-                        continue
-                    if token.startswith("MOL_ID:"):
-                        current_mol = token.split(":")[-1].strip()
-                        if current_mol not in compnd_data:
-                            compnd_data[current_mol] = {"molecule": "", "chains": []}
-                    elif token.startswith("MOLECULE:") and current_mol:
-                        compnd_data[current_mol]["molecule"] += " " + token.split(":")[-1].strip()
-                    elif token.startswith("CHAIN:") and current_mol:
-                        chains_str = token.split(":")[-1].strip()
-                        # Chains can be listed as "A", "A, B", etc.
-                        chains = [c.strip() for c in chains_str.split(",")]
-                        compnd_data[current_mol]["chains"].extend(chains)
+                compnd_lines.append(line[10:].rstrip("\r\n").strip())
             # Stop parsing once ATOM records start to save time
             elif line.startswith("ATOM") or line.startswith("HETATM"):
                 break
+
+    full_header = " ".join(compnd_lines)
+
+    for token in full_header.split(";"):
+        token = token.strip()
+        if not token:
+            continue
+        if token.startswith("MOL_ID:"):
+            current_mol = token.split(":", 1)[-1].strip()
+            if current_mol not in compnd_data:
+                compnd_data[current_mol] = {"molecule": "", "chains": []}
+        elif token.startswith("MOLECULE:") and current_mol:
+            compnd_data[current_mol]["molecule"] += " " + token.split(":", 1)[-1].strip()
+        elif token.startswith("CHAIN:") and current_mol:
+            chains_str = token.split(":", 1)[-1].strip()
+            # Chains can be listed as "A", "A, B", etc.
+            chains = [c.strip() for c in chains_str.split(",") if c.strip()]
+            compnd_data[current_mol]["chains"].extend(chains)
 
     header_results = {}
     for mol_id, info in compnd_data.items():
         mol_name = info["molecule"].upper()
         for chain in info["chains"]:
-            is_cam = "CALMODULIN" in mol_name or "CAM" in mol_name
+            # Whole-word CaM match, and reject names that merely *mention*
+            # calmodulin (binding peptides, calmodulin-dependent kinases, etc.)
+            is_cam = (
+                bool(re.search(r"\b(CALMODULIN|CAM)\b", mol_name))
+                and not any(w in mol_name for w in ("BINDING", "DEPENDENT", "KINASE", "PEPTIDE"))
+            )
             header_results[chain] = {
                 "molecule_name": info["molecule"].strip(),
                 "is_calmodulin": is_cam
             }
-            
+
     return header_results
 
 def identify_calmodulin_chain(pdb_path):
@@ -81,7 +94,9 @@ def identify_calmodulin_chain(pdb_path):
                     "identity": None, # Header match only: no alignment to human CaM was performed
                     "is_calmodulin": is_cam
                 }
-            return results
+            # Only trust the header result if it still found at least one CaM chain
+            if any(r["is_calmodulin"] for r in results.values()):
+                return results
     except Exception as e:
         print(f"Header parsing failed or incomplete: {e}. Falling back to sequence alignment.")
 
@@ -105,8 +120,8 @@ def identify_calmodulin_chain(pdb_path):
 
         # count matches
         identical = 0
-        for (qs, qe), (rs, re) in zip(best.aligned[0], best.aligned[1]):
-            for q_aa, r_aa in zip(seq[qs:qe], cam_ref[rs:re]):
+        for (qs, qe), (rs, re_) in zip(best.aligned[0], best.aligned[1]):
+            for q_aa, r_aa in zip(seq[qs:qe], cam_ref[rs:re_]):
                 if q_aa == r_aa:
                     identical += 1
 
@@ -157,7 +172,8 @@ def get_chains(pdb_path):
     return chains
 
 
-def run_prppi(pdb_path, cutoff=5.0, groups=None, cam_info=None):
+def run_prppi(pdb_path, cutoff=5.0, groups=None, cam_info=None,
+              cam_chain=None, ligand_chain=None):
     chains = get_chains(pdb_path)
     print(f"Detected chains: {chains}")
 
@@ -167,8 +183,19 @@ def run_prppi(pdb_path, cutoff=5.0, groups=None, cam_info=None):
     # Default: file order (old behavior)
     side_1, side_2 = chains[0], chains[1]
 
-    # Use CaM identification (from identify_calmodulin_chain) if provided
-    if cam_info:
+    # 1) Explicit user selection (from the GUI) always wins
+    if cam_chain and ligand_chain:
+        if cam_chain == ligand_chain:
+            raise ValueError("CaM chain and ligand chain must be different.")
+        missing = [c for c in (cam_chain, ligand_chain) if c not in chains]
+        if missing:
+            raise ValueError(
+                f"Selected chain(s) {missing} not found in PDB. Detected: {chains}"
+            )
+        side_1, side_2 = cam_chain, ligand_chain
+
+    # 2) Otherwise use CaM identification (from identify_calmodulin_chain) if provided
+    elif cam_info:
         cam_chains = [c for c in chains if cam_info.get(c, {}).get("is_calmodulin")]
         other_chains = [c for c in chains if c in cam_info and not cam_info[c]["is_calmodulin"]]
 
