@@ -71,40 +71,50 @@ def next_step_button(target, label, ready = True):
 # ═══════════════════════════════════════════════════════════════════════════════
 if workflow_step == "1. Data Input":
     st.header("Step 1: Structural Data Input")
-    
-    uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'])
-    
-    if uploaded_pdb is not None:
-        
+
+    uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'], key="pdb_uploader")
+
+    # ── A different PDB was uploaded: reset everything, then load the new file ──
+    if uploaded_pdb is not None and uploaded_pdb.name != st.session_state.get("pdb_name"):
+        _PROTECTED = {"workflow_step", "pdb_uploader"}
+        for k in list(st.session_state.keys()):
+            if k not in _PROTECTED:
+                del st.session_state[k]
+
         os.makedirs("uploaded_pdbs", exist_ok=True)
-        path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_pdb.name))
-        
-        with open(path, "wb") as f:
+        new_path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_pdb.name))
+        with open(new_path, "wb") as f:
             f.write(uploaded_pdb.getvalue())
-        
-        st.session_state["path"] = path
 
-        pdb_bytes = uploaded_pdb.getvalue().decode("utf-8")
-        
-        st.success(f"Successfully loaded: {uploaded_pdb.name}")
+        st.session_state["pdb_name"]  = uploaded_pdb.name
+        st.session_state["orig_path"] = new_path   # untouched upload; Run Analysis always starts from this
+        st.session_state["path"]      = new_path   # later steps read this (updated after repair/protonation)
+        st.session_state["pdb_text"]  = uploaded_pdb.getvalue().decode("utf-8", errors="ignore")
+
+    pdb_name = st.session_state.get("pdb_name")
+
+    if pdb_name is None:
+        st.info("Upload a PDB file to begin.")
+    else:
+        path     = st.session_state["orig_path"]
+        pdb_text = st.session_state["pdb_text"]
+
+        if uploaded_pdb is None:
+            st.caption(f"Currently loaded: **{pdb_name}**. Upload a different PDB to start over.")
+
+        st.success(f"Successfully loaded: {pdb_name}")
         st.write(f"Saved file path: {path}")
-        
+
         with st.expander("📄 View PDB File Header"):
-            st.code(pdb_bytes[:500] + "...", language="text")
-        
+            st.code(pdb_text[:500] + "...", language="text")
 
-        # ── Chain identification — only runs once per uploaded file ───────
-        already_identified = (
-            "chain_results" in st.session_state and
-            st.session_state.get("identified_for") == uploaded_pdb.name
-        )
-
-        if not already_identified:
+        # ── Chain identification: only runs once per uploaded file ────────
+        if st.session_state.get("identified_for") != pdb_name:
             with st.spinner("Identifying chains..."):
                 try:
                     chain_results = logic.identify_calmodulin_chain(path)
-                    st.session_state["chain_results"]    = chain_results
-                    st.session_state["identified_for"]   = uploaded_pdb.name
+                    st.session_state["chain_results"]  = chain_results
+                    st.session_state["identified_for"] = pdb_name
                 except Exception as e:
                     st.error(f"Chain identification failed: {e}")
                     chain_results = {}
@@ -115,41 +125,106 @@ if workflow_step == "1. Data Input":
         if chain_results:
             st.subheader("🔍 Chain Identification")
 
-            cam_chain    = None
-            ligand_chain = None
-
-            for chain_id, info in chain_results.items():
-                if info["is_calmodulin"]:
-                    cam_chain = chain_id
-                    if info.get("identity") is not None:
-                        identity_msg = f" ({info['identity']}% identity to human CaM, {info['length']} residues)"
+            with st.expander("View chain identification results", expanded=True):
+                for chain_id, info in chain_results.items():
+                    if info["is_calmodulin"]:
+                        if info.get("identity") is not None:
+                            identity_msg = f" ({info['identity']}% identity to human CaM, {info['length']} residues)"
+                        else:
+                            identity_msg = f" ({info['length']} residues)"
+                        st.success(f"Chain **{chain_id}** → CALMODULIN{identity_msg}")
                     else:
-                        identity_msg = f" ({info['length']} residues)"
-                    st.success(f"Chain **{chain_id}** → CALMODULIN{identity_msg}")
-                else:
-                    ligand_chain = chain_id
-                    st.info(
-                        f"Chain **{chain_id}** → Ligand / peptide "
-                        f"({info['length']} residues)"
-                    )
+                        st.info(f"Chain **{chain_id}** → Ligand / peptide ({info['length']} residues)")
 
-            # Save so the Run Analysis button (next rerun) can read them
+            all_chains     = list(chain_results.keys())
+            cam_candidates = [c for c in all_chains if chain_results[c]["is_calmodulin"]]
+            other_chains   = [c for c in all_chains if not chain_results[c]["is_calmodulin"]]
+
+            multi_chain  = len(all_chains) > 2
+            needs_choice = multi_chain or len(cam_candidates) != 1
+
+            # Only shown for PDB files with more than 2 chains
+            if multi_chain:
+                st.info("Please review your PDB file to understand its contents before selecting the chains to submit to PRPPI.")
+
+            def _chain_label(c):
+                i = chain_results[c]
+                tag = "CaM" if i["is_calmodulin"] else "other"
+                ident = f", {i['identity']}% identity" if i.get("identity") is not None else ""
+                return f"{c} — {tag} ({i['length']} residues{ident})"
+
+            if len(all_chains) < 2:
+                st.error("At least 2 chains are required (calmodulin + partner).")
+                cam_chain, ligand_chain = None, None
+            elif needs_choice:
+                st.warning(
+                    "Multiple chains detected (or CaM could not be resolved automatically). "
+                    "Select which chain is the **calmodulin** and which is the "
+                    "**peptide/ligand (residue) chain**."
+                )
+
+                def _rank(c):
+                    ident = chain_results[c].get("identity")
+                    return (ident if ident is not None else -1, chain_results[c]["length"])
+
+                default_cam = max(cam_candidates, key=_rank) if cam_candidates else all_chains[0]
+
+                # Previously saved choices (these survive leaving and returning to this page)
+                cam_prev = st.session_state.get("cam_chain")
+                lig_prev = st.session_state.get("ligand_chain")
+
+                if cam_prev in all_chains:
+                    cam_index = all_chains.index(cam_prev)
+                elif multi_chain:
+                    cam_index = None          # more than 2 chains: selection required
+                else:
+                    cam_index = all_chains.index(default_cam)
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    cam_chain = st.selectbox(
+                        "Calmodulin chain",
+                        all_chains,
+                        index=cam_index,
+                        placeholder="Select calmodulin chain",
+                        format_func=_chain_label,
+                    )
+                with col_b:
+                    lig_options = [c for c in all_chains if c != cam_chain]
+                    if lig_prev in lig_options:
+                        lig_index = lig_options.index(lig_prev)
+                    elif multi_chain:
+                        lig_index = None      # more than 2 chains: selection required
+                    else:
+                        default_lig = next((c for c in lig_options if c in other_chains), lig_options[0])
+                        lig_index = lig_options.index(default_lig)
+                    ligand_chain = st.selectbox(
+                        "Peptide / ligand chain",
+                        lig_options,
+                        index=lig_index,
+                        placeholder="Select peptide / ligand chain",
+                        format_func=_chain_label,
+                    )
+            else:
+                cam_chain, ligand_chain = cam_candidates[0], other_chains[0]
+
+            # Save so the Run Analysis button (next rerun) and later steps can read them
             st.session_state["cam_chain"]    = cam_chain
             st.session_state["ligand_chain"] = ligand_chain
 
-        # ── PDB Inspection (NEW) ──────────────────────────────────────────
-        # Runs logic5.inspect_pdb() and shows the user what problems were found before the repair step.
-        already_inspected = (
-            "inspection_report" in st.session_state and
-            st.session_state.get("inspected_for") == uploaded_pdb.name
-        )
+        # ── Gate: for >2 chains, wait for a selection before inspecting ───
+        if chain_results and len(chain_results) > 2 and not (cam_chain and ligand_chain):
+            st.info("Select the calmodulin and peptide/ligand chains above to continue.")
+            st.stop()
 
-        if not already_inspected:
+        # ── PDB Inspection ────────────────────────────────────────────────
+        # Runs logic5.get_inspection_report() and shows the user what problems were found before the repair step.
+        if st.session_state.get("inspected_for") != pdb_name:
             with st.spinner("Inspecting PDB for structural completeness..."):
                 try:
                     report = logic5.get_inspection_report(path)
                     st.session_state["inspection_report"] = report
-                    st.session_state["inspected_for"]     = uploaded_pdb.name
+                    st.session_state["inspected_for"]     = pdb_name
                 except Exception as e:
                     st.error(f"PDB inspection failed: {e}")
                     report = None
@@ -202,8 +277,9 @@ if workflow_step == "1. Data Input":
 
             cam_chain    = st.session_state.get("cam_chain")
             ligand_chain = st.session_state.get("ligand_chain")
+            repair_info  = None
 
-            # Step A: PDB repair (NEW — runs logic5 before prppi)
+            # Step A: PDB repair (runs logic5 before prppi)
             if report and (report["has_missing_residues"] or report["has_missing_sidechains"]):
                 if not cam_chain or not ligand_chain:
                     st.error(
@@ -221,26 +297,12 @@ if workflow_step == "1. Data Input":
                             return_details   = True,
                         )
                         st.session_state["path"] = repaired_path
-
-                        strategy_labels = {
-                            "none_needed":                   "No repair was needed.",
-                            "sidechain_rotamer_optimized":   "Side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
-                            "rebuilt_and_rotamer_optimized": "Missing residues and side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
-                        }
-                        st.success(
-                            f"✅ Repair complete: {strategy_labels.get(strategy, strategy)}\n\n"
-                            f"Repaired file: `{repaired_path}`"
-                        )
-                        if rebuilt:
-                            with st.expander(f"View {len(rebuilt)} rebuilt / rotamer-optimized residues"):
-                                st.text(", ".join(f"{c}{r}" for c, r in rebuilt))
+                        repair_info = {"strategy": strategy, "repaired_path": repaired_path, "rebuilt": rebuilt}
                         path = repaired_path
 
                     except Exception as e:
                         st.error(f"❌ PDB repair failed: {e}")
                         st.stop()
-            else:
-                st.info("PDB is complete — skipping repair step.")
 
             # Step B: Fix protonation (existing logic.py step)
             with st.spinner("Fixing PDB protonation..."):
@@ -252,23 +314,45 @@ if workflow_step == "1. Data Input":
                 json_path = logic.run_prppi(
                     fixed_pdb, cutoff=5.0,
                     cam_info=st.session_state.get("chain_results"),
+                    cam_chain=st.session_state.get("cam_chain"),
+                    ligand_chain=st.session_state.get("ligand_chain"),
                 )
 
             if json_path:
-                st.success(f"Analysis complete! Results saved to: {json_path}")
-                st.session_state["json_path"] = json_path
-                st.session_state["step1_done_for"] = uploaded_pdb.name   
-                st.session_state.pop("step2_done", None)                 
+                st.session_state["json_path"]       = json_path
+                st.session_state["step1_done_for"]  = pdb_name
+                st.session_state["analysis_result"] = {"repair": repair_info, "json_path": json_path}
+                st.session_state.pop("step2_done", None)
                 st.session_state.pop("step3_done", None)
+                st.session_state.pop("step3_result", None)
 
-                with st.expander("🔬 View JSON Contents"):
-                    with open(json_path) as f:
-                        import json as jsonlib
-                        json_data = jsonlib.load(f)
-                    st.json(json_data)
+        # ── Show the latest analysis results (persists across steps) ──────
+        res = st.session_state.get("analysis_result")
+        if res:
+            if res["repair"]:
+                strategy_labels = {
+                    "none_needed":                   "No repair was needed.",
+                    "sidechain_rotamer_optimized":   "Side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
+                    "rebuilt_and_rotamer_optimized": "Missing residues and side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
+                }
+                st.success(
+                    f"✅ Repair complete: {strategy_labels.get(res['repair']['strategy'], res['repair']['strategy'])}\n\n"
+                    f"Repaired file: `{res['repair']['repaired_path']}`"
+                )
+                if res["repair"]["rebuilt"]:
+                    with st.expander(f"View {len(res['repair']['rebuilt'])} rebuilt / rotamer-optimized residues"):
+                        st.text(", ".join(f"{c}{r}" for c, r in res["repair"]["rebuilt"]))
+            else:
+                st.info("PDB is complete — skipping repair step.")
 
-    next_step_button("2. JSON Processing", "Click to head to JSON Processing", 
-                     ready = (uploaded_pdb is not None and st.session_state.get("step1_done_for") == uploaded_pdb.name))
+            st.success(f"Analysis complete! Results saved to: {res['json_path']}")
+            with st.expander("🔬 View JSON Contents"):
+                import json as jsonlib
+                with open(res["json_path"]) as f:
+                    st.json(jsonlib.load(f))
+
+    next_step_button("2. JSON Processing", "Click to head to JSON Processing",
+                     ready=(pdb_name is not None and st.session_state.get("step1_done_for") == pdb_name))
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 2: JSON Processing  (unchanged)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -278,7 +362,6 @@ elif workflow_step == "2. JSON Processing":
     json_path = st.session_state.get("json_path", None)
 
     if json_path:
-        st.success(f"JSON ready from Step 1: {json_path}")
         st.session_state["json_paths"] = [json_path]
         st.session_state["json_path"] = json_path
     else:
@@ -341,6 +424,10 @@ elif workflow_step == "2. JSON Processing":
         else:
             st.warning("⚠️ Chain identification not found. Please complete Step 1 first, or enter ranges manually.")
 
+        def _idx(options, key, default):
+            val = st.session_state.get(key)
+            return options.index(val) if val in options else default
+
         with st.form("residue_form"):
 
             st.markdown("**Calmodulin (Mutant) Range**")
@@ -350,20 +437,20 @@ elif workflow_step == "2. JSON Processing":
                     mutant_start = st.selectbox(
                         "Mutant Beginning",
                         options=cam_options,
-                        index=0
+                        index=_idx(cam_options, "saved_mutant_start", 0)
                     )
                 with col2:
                     mutant_end = st.selectbox(
                         "Mutant Ending",
                         options=cam_options,
-                        index=len(cam_options) - 1
+                        index=_idx(cam_options, "saved_mutant_end", len(cam_options) - 1)
                     )
             else:
                 col1, col2 = st.columns(2)
                 with col1:
-                    mutant_start = st.text_input("Mutant Beginning")
+                    mutant_start = st.text_input("Mutant Beginning", value=st.session_state.get("saved_mutant_start", ""))
                 with col2:
-                    mutant_end = st.text_input("Mutant Ending")
+                    mutant_end = st.text_input("Mutant Ending", value=st.session_state.get("saved_mutant_end", ""))
 
             st.markdown("**Ligand Range**")
             if ligand_options:
@@ -372,20 +459,20 @@ elif workflow_step == "2. JSON Processing":
                     ligand_start = st.selectbox(
                         "Ligand Beginning",
                         options=ligand_options,
-                        index=0
+                        index=_idx(ligand_options, "saved_ligand_start", 0)
                     )
                 with col2:
                     ligand_end = st.selectbox(
                         "Ligand Ending",
                         options=ligand_options,
-                        index=len(ligand_options) - 1
+                        index=_idx(ligand_options, "saved_ligand_end", len(ligand_options) - 1)
                     )
             else:
                 col1, col2 = st.columns(2)
                 with col1:
-                    ligand_start = st.text_input("Ligand Beginning")
+                    ligand_start = st.text_input("Ligand Beginning", value=st.session_state.get("saved_ligand_start", ""))
                 with col2:
-                    ligand_end = st.text_input("Ligand Ending")
+                    ligand_end = st.text_input("Ligand Ending", value=st.session_state.get("saved_ligand_end", ""))
 
             submitted = st.form_submit_button("▶ Process JSON(s)")
 
@@ -395,8 +482,14 @@ elif workflow_step == "2. JSON Processing":
             else:
                 for json_file in json_paths:
                     logic2.add_variables_to_json(json_file, mutant_start, mutant_end, ligand_start, ligand_end)
+                st.session_state.update({
+                    "saved_mutant_start": mutant_start, "saved_mutant_end": mutant_end,
+                    "saved_ligand_start": ligand_start, "saved_ligand_end": ligand_end,
+                    "step2_done": True,
+                })
                 st.success("All JSON files processed!")
-                st.session_state["step2_done"] = True
+        elif st.session_state.get("step2_done"):
+            st.success("All JSON files processed!")
 
     next_step_button("3. OSPREY Execution", "Click to head to OSPREY Execution", ready=st.session_state.get("step2_done", False))
 
@@ -421,7 +514,19 @@ elif workflow_step == "3. OSPREY Execution":
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Design Site")
-        target_res = st.selectbox("Select Residue to Mutate", residues)
+        prev_res = st.session_state.get("step3_target_res")
+        target_res = st.selectbox(
+            "Select Residue to Mutate", residues,
+            index=residues.index(prev_res) if prev_res in residues else 0,
+        )
+
+        # A different residue was chosen: clear the amino acid picks and the previous run's results
+        if prev_res is not None and prev_res != target_res:
+            st.session_state["saved_mutations"] = []
+            st.session_state.pop("step3_result", None)
+            st.session_state["step3_done"] = False
+        st.session_state["step3_target_res"] = target_res
+
         all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR']
         wt_letter = target_res[-1].upper() if target_res else None
         wt_three_letter = AA_1TO3.get(wt_letter)
@@ -429,20 +534,35 @@ elif workflow_step == "3. OSPREY Execution":
             mutation_options = [aa for aa in all_aa_options if aa != wt_three_letter]
         else:
             mutation_options = all_aa_options
-        mutations = st.multiselect("Select Amino Acids", mutation_options)
+        mutations = st.multiselect(
+            "Select Amino Acids", mutation_options,
+            default=[m for m in st.session_state.get("saved_mutations", []) if m in mutation_options],
+        )
 
     with col2:
         st.subheader("Parameters")
-        epsilon = st.slider("K* Precision (Epsilon)", 0.01, 1.0, 0.99)
-        cores = st.number_input("CPU Cores", 1, 16, 4)
-        gpus = st.number_input("GPUs", min_value=0, max_value=8, value=0, step=1)
+        epsilon = st.slider("K* Precision (Epsilon)", 0.01, 1.0, st.session_state.get("saved_epsilon", 0.99))
+        cores = st.number_input("CPU Cores", 1, 16, st.session_state.get("saved_cores", 4))
+        gpus = st.number_input("GPUs", min_value=0, max_value=8, value=st.session_state.get("saved_gpus", 0), step=1)
         if gpus > 0:
-            streams_per_gpu = st.number_input("Streams per GPU", min_value=0, max_value=256, value=82, step=1)
+            streams_per_gpu = st.number_input("Streams per GPU", min_value=0, max_value=256,
+                                              value=st.session_state.get("saved_streams", 82), step=1)
+            st.session_state["saved_streams"] = streams_per_gpu
         else:
             streams_per_gpu = 0
             st.info("Streams per GPU set to 0 (no GPU detected)")
-        heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, 100000)
-        garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, 8192)
+        heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, st.session_state.get("saved_heap", 100000))
+        garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, st.session_state.get("saved_garbage", 8192))
+
+    # Remember the current inputs so they are still here when you come back to this step
+    st.session_state.update({
+        "saved_mutations": mutations,
+        "saved_epsilon":   epsilon,
+        "saved_cores":     cores,
+        "saved_gpus":      gpus,
+        "saved_heap":      heap_size,
+        "saved_garbage":   garbage_size,
+    })
 
     if st.button("Generate & Run OSPREY Script"):
         st.session_state["step3_done"] = False 
@@ -464,24 +584,16 @@ elif workflow_step == "3. OSPREY Execution":
                     target_residue=target_res,
                     amino_acids=mutations
                 )
-            st.success(f"{len(generated)} OSPREY script(s) generated!")
-            for f in generated:
-                st.write(f"• {f}")
             st.session_state["osprey_scripts"] = generated
 
             with st.spinner("Running OSPREY (this may take a while)..."):
                 run_results = logic3.run_osprey_scripts(generated)
 
-            for r in run_results:
-                if "error" in r:
-                    st.error(f"❌ {r['script']}: {r['error']}")
-                elif r["returncode"] != 0:
-                    st.error(f"❌ {r['script']} failed:\n{r['stderr']}")
-                else:
-                    st.success(f"✅ {r['script']} completed")
-                    if r["stdout"]:
-                        with st.expander("View output"):
-                            st.code(r["stdout"])
+            st.session_state["step3_result"] = {
+                "target_res":  target_res,
+                "generated":   generated,
+                "run_results": run_results,
+            }
             st.session_state["step3_done"] = all(
                 ("error" not in r) and r["returncode"] == 0 for r in run_results
             )    
@@ -489,6 +601,24 @@ elif workflow_step == "3. OSPREY Execution":
         except ValueError as e:
             st.error(f"❌ Setup error: {e}")
             st.stop()
+
+    # ── Show the latest run (persists when you leave and return) ──────────
+    res3 = st.session_state.get("step3_result")
+    if res3:
+        st.success(f"{len(res3['generated'])} OSPREY script(s) generated!")
+        for f in res3["generated"]:
+            st.write(f"• {f}")
+
+        for r in res3["run_results"]:
+            if "error" in r:
+                st.error(f"❌ {r['script']}: {r['error']}")
+            elif r["returncode"] != 0:
+                st.error(f"❌ {r['script']} failed:\n{r['stderr']}")
+            else:
+                st.success(f"✅ {r['script']} completed")
+                if r["stdout"]:
+                    with st.expander("View output"):
+                        st.code(r["stdout"])
 
     next_step_button("4. Results & Analytics", "Click to head to Results & Analytics", ready=st.session_state.get("step3_done", False))
 

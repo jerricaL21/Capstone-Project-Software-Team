@@ -56,9 +56,13 @@ def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gp
         subfolder = os.path.join(output_dir, key)
         os.makedirs(subfolder, exist_ok=True)
 
-        # Get the subkeys for object "A" and "B"
-        subkeys_from_A = list(subdata["A"].keys())
-        subkeys_from_B = list(subdata["B"].keys())            
+        # Extract the selected chain letters from Complex_Size (defaulting to 'A' and 'B')
+        chain_A = variable1[0] if variable1 else "A"
+        chain_B = variable3[0] if variable3 else "B"
+
+        # Dynamically pull interactions for the active chains
+        subkeys_from_A = list(subdata.get(chain_A, {}).keys())
+        subkeys_from_B = list(subdata.get(chain_B, {}).keys())          
             
         # Create the content for the .py file
 
