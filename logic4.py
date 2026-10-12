@@ -44,10 +44,14 @@ def read_file_data(tsv_file):
         csv_data = "".join(lines[header_idx:])
         df = pd.read_csv(io.StringIO(csv_data), sep='\t')
         
-        # Identify the correct K* column
-        possible_cols = ['K* Lower (log10)', 'K* Score (Log10)', 'K* Score (log10)']
-        score_col = next((c for c in possible_cols if c in df.columns), None)
-        
+        # Identify the correct K* column(s)
+        possible_cols = ['K* Lower (log10)', 'K* Upper (Log10)']
+        existing_cols = [c for c in cols if c in df.columns]
+        if len(existing_cols) == 2:
+            score_col = df[existing_cols].astype(float).mean(axis=1)
+        else:
+            score_col = df[existing_cols[0]].astype(float)
+
         if score_col is None or 'Sequence' not in df.columns: return None
 
         # The first row is always the reference (Wild-Type)
@@ -101,12 +105,23 @@ def analyze_results(base_dir):
 
     # DataFrame 1: The Matrix for the Heatmap (Pivot Table)
     # This aligns different mutations (columns) against residue sites (rows)
+    # IMPORTANT: do NOT .fillna(0) here. A missing cell means this mutation
+    # was never tested at this site — that's semantically different from a
+    # mutation that WAS tested and scored an exact 0.000 delta (a true tie
+    # with wild-type). Backfilling both to 0.0 makes them indistinguishable
+    # downstream: gui.py's heatmap explicitly checks for NaN to gray out
+    # untested cells (see the "Mask NaN cells" step in the Panel A heatmap
+    # code), and logic6.select_best_mutations() relies on row.dropna() to
+    # exclude untested mutations before picking the best real one via
+    # idxmax(). Filling with 0 silently defeats both of those checks and
+    # lets an untested amino acid outrank every mutation that was actually
+    # scored, whenever all real deltas are negative.
     pivot_delta = master_df.pivot_table(
         index=['WT_Full'], 
         columns='Mutation', 
         values='Delta',
         aggfunc='first'
-    ).fillna(0).sort_index()
+    ).sort_index()
 
     # DataFrame 1b: Annotation matrix — same shape/index/columns as pivot_delta,
     # holding the mutation code to print inside each occupied heatmap cell.
