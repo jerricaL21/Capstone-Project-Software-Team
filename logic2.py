@@ -26,8 +26,3 @@ def add_variables_to_json(json_file, mutant_beginning, mutant_ending, ligand_beg
     # Save the modified JSON with the same name
     with open(json_file, 'w') as f:
         json.dump(data, f, indent=4)
-
-
-
-
-
