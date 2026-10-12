@@ -3,6 +3,17 @@ import pandas as pd
 import time
 import os
 import importlib
+from install_pymol import ensure_pymol
+
+# ── Ensure PyMOL is available in this interpreter (cached so it only
+#    checks/installs once per session, not on every Streamlit rerun) ──
+@st.cache_resource
+def _pymol_ready():
+    return ensure_pymol()
+
+pymol_ok = _pymol_ready()
+if not pymol_ok:
+    st.sidebar.error("⚠️ PyMOL not available — Step 5 will not work.")
 
 # Importing the script files
 import logic
@@ -10,12 +21,16 @@ import logic2
 import logic3
 import logic4
 import logic5
+import logic6
+import logic7
 
 importlib.reload(logic)
 importlib.reload(logic2)
 importlib.reload(logic3)
 importlib.reload(logic4)
 importlib.reload(logic5)
+importlib.reload(logic6)
+importlib.reload(logic7)
 
 # Used in Step 3 to figure out which three-letter amino acid code corresponds to wild-type residue code
 AA_1TO3 = {
@@ -37,48 +52,69 @@ st.markdown("""
 
 st.sidebar.header("Pipeline Controls")
 workflow_step = st.sidebar.radio("Navigate Workflow", 
-    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics"])
+    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics", "5. PyMOL Redesign", "6. Molecular Dynamics"],
+    key="workflow_step")
+
+# ── "Next step" button shown at the bottom of each page ──────────────────────
+def _go_to_step(target):
+    st.session_state["workflow_step"] = target
+
+def next_step_button(target, label, ready = True):
+    if not ready:
+        return
+    st.markdown("---")
+    st.button(f"{label}  ➡️", key=f"next_to_{target}", on_click=_go_to_step,
+              args=(target,), type="primary", use_container_width=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 1: Data Input
 # ═══════════════════════════════════════════════════════════════════════════════
 if workflow_step == "1. Data Input":
     st.header("Step 1: Structural Data Input")
-    
-    uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'])
-    
-    if uploaded_pdb is not None:
-        
+
+    uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'], key="pdb_uploader")
+
+    # ── A different PDB was uploaded: reset everything, then load the new file ──
+    if uploaded_pdb is not None and uploaded_pdb.name != st.session_state.get("pdb_name"):
+        _PROTECTED = {"workflow_step", "pdb_uploader"}
+        for k in list(st.session_state.keys()):
+            if k not in _PROTECTED:
+                del st.session_state[k]
+
         os.makedirs("uploaded_pdbs", exist_ok=True)
-        path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_pdb.name))
-        
-        with open(path, "wb") as f:
+        new_path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_pdb.name))
+        with open(new_path, "wb") as f:
             f.write(uploaded_pdb.getvalue())
-        
-        st.session_state["path"] = path
 
-        pdb_bytes = uploaded_pdb.getvalue().decode("utf-8")
-        
-        st.success(f"Successfully loaded: {uploaded_pdb.name}")
+        st.session_state["pdb_name"]  = uploaded_pdb.name
+        st.session_state["orig_path"] = new_path   # untouched upload; Run Analysis always starts from this
+        st.session_state["path"]      = new_path   # later steps read this (updated after repair/protonation)
+        st.session_state["pdb_text"]  = uploaded_pdb.getvalue().decode("utf-8", errors="ignore")
+
+    pdb_name = st.session_state.get("pdb_name")
+
+    if pdb_name is None:
+        st.info("Upload a PDB file to begin.")
+    else:
+        path     = st.session_state["orig_path"]
+        pdb_text = st.session_state["pdb_text"]
+
+        if uploaded_pdb is None:
+            st.caption(f"Currently loaded: **{pdb_name}**. Upload a different PDB to start over.")
+
+        st.success(f"Successfully loaded: {pdb_name}")
         st.write(f"Saved file path: {path}")
-        
+
         with st.expander("📄 View PDB File Header"):
-            st.code(pdb_bytes[:500] + "...", language="text")
-        
-        st.warning("Note: To view the 3D structure, you will need to install 'stmol'.")
+            st.code(pdb_text[:500] + "...", language="text")
 
-        # ── Chain identification — only runs once per uploaded file ───────
-        already_identified = (
-            "chain_results" in st.session_state and
-            st.session_state.get("identified_for") == uploaded_pdb.name
-        )
-
-        if not already_identified:
+        # ── Chain identification: only runs once per uploaded file ────────
+        if st.session_state.get("identified_for") != pdb_name:
             with st.spinner("Identifying chains..."):
                 try:
                     chain_results = logic.identify_calmodulin_chain(path)
-                    st.session_state["chain_results"]    = chain_results
-                    st.session_state["identified_for"]   = uploaded_pdb.name
+                    st.session_state["chain_results"]  = chain_results
+                    st.session_state["identified_for"] = pdb_name
                 except Exception as e:
                     st.error(f"Chain identification failed: {e}")
                     chain_results = {}
@@ -89,46 +125,106 @@ if workflow_step == "1. Data Input":
         if chain_results:
             st.subheader("🔍 Chain Identification")
 
-            cam_chain    = None
-            ligand_chain = None
+            with st.expander("View chain identification results", expanded=True):
+                for chain_id, info in chain_results.items():
+                    if info["is_calmodulin"]:
+                        if info.get("identity") is not None:
+                            identity_msg = f" ({info['identity']}% identity to human CaM, {info['length']} residues)"
+                        else:
+                            identity_msg = f" ({info['length']} residues)"
+                        st.success(f"Chain **{chain_id}** → CALMODULIN{identity_msg}")
+                    else:
+                        st.info(f"Chain **{chain_id}** → Ligand / peptide ({info['length']} residues)")
 
-            for chain_id, info in chain_results.items():
-                if info["is_calmodulin"]:
-                    cam_chain = chain_id
-                    st.success(
-                        f"Chain **{chain_id}** → CALMODULIN "
-                        f"({info['identity']}% identity to human CaM, {info['length']} residues)"
-                    )
-                else:
-                    ligand_chain = chain_id
-                    st.info(
-                        f"Chain **{chain_id}** → Ligand / peptide "
-                        f"({info['identity']}% identity to human CaM, {info['length']} residues)"
-                    )
+            all_chains     = list(chain_results.keys())
+            cam_candidates = [c for c in all_chains if chain_results[c]["is_calmodulin"]]
+            other_chains   = [c for c in all_chains if not chain_results[c]["is_calmodulin"]]
 
-            if not cam_chain:
+            multi_chain  = len(all_chains) > 2
+            needs_choice = multi_chain or len(cam_candidates) != 1
+
+            # Only shown for PDB files with more than 2 chains
+            if multi_chain:
+                st.info("Please review your PDB file to understand its contents before selecting the chains to submit to PRPPI.")
+
+            def _chain_label(c):
+                i = chain_results[c]
+                tag = "CaM" if i["is_calmodulin"] else "other"
+                ident = f", {i['identity']}% identity" if i.get("identity") is not None else ""
+                return f"{c} — {tag} ({i['length']} residues{ident})"
+
+            if len(all_chains) < 2:
+                st.error("At least 2 chains are required (calmodulin + partner).")
+                cam_chain, ligand_chain = None, None
+            elif needs_choice:
                 st.warning(
-                    "⚠️ No chain matched calmodulin (≥80% identity). "
-                    "Proceed to Step 2 and enter residue ranges manually."
+                    "Multiple chains detected (or CaM could not be resolved automatically). "
+                    "Select which chain is the **calmodulin** and which is the "
+                    "**peptide/ligand (residue) chain**."
                 )
 
+                def _rank(c):
+                    ident = chain_results[c].get("identity")
+                    return (ident if ident is not None else -1, chain_results[c]["length"])
+
+                default_cam = max(cam_candidates, key=_rank) if cam_candidates else all_chains[0]
+
+                # Previously saved choices (these survive leaving and returning to this page)
+                cam_prev = st.session_state.get("cam_chain")
+                lig_prev = st.session_state.get("ligand_chain")
+
+                if cam_prev in all_chains:
+                    cam_index = all_chains.index(cam_prev)
+                elif multi_chain:
+                    cam_index = None          # more than 2 chains: selection required
+                else:
+                    cam_index = all_chains.index(default_cam)
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    cam_chain = st.selectbox(
+                        "Calmodulin chain",
+                        all_chains,
+                        index=cam_index,
+                        placeholder="Select calmodulin chain",
+                        format_func=_chain_label,
+                    )
+                with col_b:
+                    lig_options = [c for c in all_chains if c != cam_chain]
+                    if lig_prev in lig_options:
+                        lig_index = lig_options.index(lig_prev)
+                    elif multi_chain:
+                        lig_index = None      # more than 2 chains: selection required
+                    else:
+                        default_lig = next((c for c in lig_options if c in other_chains), lig_options[0])
+                        lig_index = lig_options.index(default_lig)
+                    ligand_chain = st.selectbox(
+                        "Peptide / ligand chain",
+                        lig_options,
+                        index=lig_index,
+                        placeholder="Select peptide / ligand chain",
+                        format_func=_chain_label,
+                    )
+            else:
+                cam_chain, ligand_chain = cam_candidates[0], other_chains[0]
+
+            # Save so the Run Analysis button (next rerun) and later steps can read them
             st.session_state["cam_chain"]    = cam_chain
             st.session_state["ligand_chain"] = ligand_chain
 
-        # ── PDB Inspection (NEW) ──────────────────────────────────────────
-        # Runs logic5.inspect_pdb() and shows the user what problems were
-        # found before the repair step.
-        already_inspected = (
-            "inspection_report" in st.session_state and
-            st.session_state.get("inspected_for") == uploaded_pdb.name
-        )
+        # ── Gate: for >2 chains, wait for a selection before inspecting ───
+        if chain_results and len(chain_results) > 2 and not (cam_chain and ligand_chain):
+            st.info("Select the calmodulin and peptide/ligand chains above to continue.")
+            st.stop()
 
-        if not already_inspected:
+        # ── PDB Inspection ────────────────────────────────────────────────
+        # Runs logic5.get_inspection_report() and shows the user what problems were found before the repair step.
+        if st.session_state.get("inspected_for") != pdb_name:
             with st.spinner("Inspecting PDB for structural completeness..."):
                 try:
                     report = logic5.get_inspection_report(path)
                     st.session_state["inspection_report"] = report
-                    st.session_state["inspected_for"]     = uploaded_pdb.name
+                    st.session_state["inspected_for"]     = pdb_name
                 except Exception as e:
                     st.error(f"PDB inspection failed: {e}")
                     report = None
@@ -164,18 +260,15 @@ if workflow_step == "1. Data Input":
                     st.success("✅ All side chains complete")
 
             # Describe what repair strategy will be used
-            if report["has_missing_residues"]:
-                st.warning(
-                    "⚠️ **Missing residues detected.** No automatic repair is "
-                    "currently available for missing residues — the pipeline "
-                    "will proceed with the original coordinates. "
-                    "Side chains will still be repaired if needed."
-                )
-            elif report["has_missing_sidechains"]:
-                st.info(
-                    "🔧 **Repair strategy: PDBFixer** — Only side-chain atoms "
-                    "are missing. Fast in-process repair, no GPU needed."
-                )
+            if report["has_missing_residues"] or report["has_missing_sidechains"]:
+                msg = "🔧 **Repair strategy: PDBFixer + PyMOL rotamer selection.** "
+                if report["has_missing_residues"]:
+                    msg += ("Missing internal residues will be rebuilt. "
+                            "Rebuilt loop coordinates are approximate, so treat contacts there with caution. ")
+                if report["has_missing_sidechains"]:
+                    msg += "Incomplete side chains will be completed. "
+                msg += "PyMOL then picks the lowest-clash rotamer for each rebuilt residue."
+                st.warning(msg)
             else:
                 st.success("✅ PDB is complete — no repair needed before analysis.")
 
@@ -184,8 +277,9 @@ if workflow_step == "1. Data Input":
 
             cam_chain    = st.session_state.get("cam_chain")
             ligand_chain = st.session_state.get("ligand_chain")
+            repair_info  = None
 
-            # Step A: PDB repair (NEW — runs logic5 before prppi)
+            # Step A: PDB repair (runs logic5 before prppi)
             if report and (report["has_missing_residues"] or report["has_missing_sidechains"]):
                 if not cam_chain or not ligand_chain:
                     st.error(
@@ -194,31 +288,21 @@ if workflow_step == "1. Data Input":
                     )
                     st.stop()
 
-                with st.spinner("Repairing PDB structure..."):
+                with st.spinner("Repairing PDB structure (PDBFixer + PyMOL)..."):
                     try:
-                        repaired_path, strategy = logic5.prepare_pdb(
+                        repaired_path, strategy, rebuilt = logic5.prepare_pdb(
                             pdb_path         = path,
                             cam_chain_id     = cam_chain,
                             peptide_chain_id = ligand_chain,
+                            return_details   = True,
                         )
                         st.session_state["path"] = repaired_path
-
-                        strategy_labels = {
-                            "none_needed":              "No repair was needed.",
-                            "sidechain_only":           "Side chains rebuilt with PDBFixer.",
-                            "missing_residues_skipped": "Missing residues detected but no automatic repair is available — proceeding with original coordinates.",
-                        }
-                        st.success(
-                            f"✅ Repair complete: {strategy_labels.get(strategy, strategy)}\n\n"
-                            f"Repaired file: `{repaired_path}`"
-                        )
+                        repair_info = {"strategy": strategy, "repaired_path": repaired_path, "rebuilt": rebuilt}
                         path = repaired_path
 
                     except Exception as e:
                         st.error(f"❌ PDB repair failed: {e}")
                         st.stop()
-            else:
-                st.info("PDB is complete — skipping repair step.")
 
             # Step B: Fix protonation (existing logic.py step)
             with st.spinner("Fixing PDB protonation..."):
@@ -227,19 +311,48 @@ if workflow_step == "1. Data Input":
 
             # Step C: Run prppi (existing logic.py step)
             with st.spinner("Running PRPPI analysis..."):
-                json_path = logic.run_prppi(fixed_pdb, cutoff=5.0)
+                json_path = logic.run_prppi(
+                    fixed_pdb, cutoff=5.0,
+                    cam_info=st.session_state.get("chain_results"),
+                    cam_chain=st.session_state.get("cam_chain"),
+                    ligand_chain=st.session_state.get("ligand_chain"),
+                )
 
             if json_path:
-                st.success(f"Analysis complete! Results saved to: {json_path}")
-                st.session_state["json_path"] = json_path
+                st.session_state["json_path"]       = json_path
+                st.session_state["step1_done_for"]  = pdb_name
+                st.session_state["analysis_result"] = {"repair": repair_info, "json_path": json_path}
+                st.session_state.pop("step2_done", None)
+                st.session_state.pop("step3_done", None)
+                st.session_state.pop("step3_result", None)
 
-                with st.expander("🔬 View JSON Contents"):
-                    with open(json_path) as f:
-                        import json as jsonlib
-                        json_data = jsonlib.load(f)
-                    st.json(json_data)
+        # ── Show the latest analysis results (persists across steps) ──────
+        res = st.session_state.get("analysis_result")
+        if res:
+            if res["repair"]:
+                strategy_labels = {
+                    "none_needed":                   "No repair was needed.",
+                    "sidechain_rotamer_optimized":   "Side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
+                    "rebuilt_and_rotamer_optimized": "Missing residues and side chains rebuilt with PDBFixer; rotamers chosen in PyMOL.",
+                }
+                st.success(
+                    f"✅ Repair complete: {strategy_labels.get(res['repair']['strategy'], res['repair']['strategy'])}\n\n"
+                    f"Repaired file: `{res['repair']['repaired_path']}`"
+                )
+                if res["repair"]["rebuilt"]:
+                    with st.expander(f"View {len(res['repair']['rebuilt'])} rebuilt / rotamer-optimized residues"):
+                        st.text(", ".join(f"{c}{r}" for c, r in res["repair"]["rebuilt"]))
+            else:
+                st.info("PDB is complete — skipping repair step.")
 
+            st.success(f"Analysis complete! Results saved to: {res['json_path']}")
+            with st.expander("🔬 View JSON Contents"):
+                import json as jsonlib
+                with open(res["json_path"]) as f:
+                    st.json(jsonlib.load(f))
 
+    next_step_button("2. JSON Processing", "Click to head to JSON Processing",
+                     ready=(pdb_name is not None and st.session_state.get("step1_done_for") == pdb_name))
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 2: JSON Processing  (unchanged)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -249,7 +362,6 @@ elif workflow_step == "2. JSON Processing":
     json_path = st.session_state.get("json_path", None)
 
     if json_path:
-        st.success(f"JSON ready from Step 1: {json_path}")
         st.session_state["json_paths"] = [json_path]
         st.session_state["json_path"] = json_path
     else:
@@ -312,6 +424,10 @@ elif workflow_step == "2. JSON Processing":
         else:
             st.warning("⚠️ Chain identification not found. Please complete Step 1 first, or enter ranges manually.")
 
+        def _idx(options, key, default):
+            val = st.session_state.get(key)
+            return options.index(val) if val in options else default
+
         with st.form("residue_form"):
 
             st.markdown("**Calmodulin (Mutant) Range**")
@@ -321,20 +437,20 @@ elif workflow_step == "2. JSON Processing":
                     mutant_start = st.selectbox(
                         "Mutant Beginning",
                         options=cam_options,
-                        index=0
+                        index=_idx(cam_options, "saved_mutant_start", 0)
                     )
                 with col2:
                     mutant_end = st.selectbox(
                         "Mutant Ending",
                         options=cam_options,
-                        index=len(cam_options) - 1
+                        index=_idx(cam_options, "saved_mutant_end", len(cam_options) - 1)
                     )
             else:
                 col1, col2 = st.columns(2)
                 with col1:
-                    mutant_start = st.text_input("Mutant Beginning")
+                    mutant_start = st.text_input("Mutant Beginning", value=st.session_state.get("saved_mutant_start", ""))
                 with col2:
-                    mutant_end = st.text_input("Mutant Ending")
+                    mutant_end = st.text_input("Mutant Ending", value=st.session_state.get("saved_mutant_end", ""))
 
             st.markdown("**Ligand Range**")
             if ligand_options:
@@ -343,20 +459,20 @@ elif workflow_step == "2. JSON Processing":
                     ligand_start = st.selectbox(
                         "Ligand Beginning",
                         options=ligand_options,
-                        index=0
+                        index=_idx(ligand_options, "saved_ligand_start", 0)
                     )
                 with col2:
                     ligand_end = st.selectbox(
                         "Ligand Ending",
                         options=ligand_options,
-                        index=len(ligand_options) - 1
+                        index=_idx(ligand_options, "saved_ligand_end", len(ligand_options) - 1)
                     )
             else:
                 col1, col2 = st.columns(2)
                 with col1:
-                    ligand_start = st.text_input("Ligand Beginning")
+                    ligand_start = st.text_input("Ligand Beginning", value=st.session_state.get("saved_ligand_start", ""))
                 with col2:
-                    ligand_end = st.text_input("Ligand Ending")
+                    ligand_end = st.text_input("Ligand Ending", value=st.session_state.get("saved_ligand_end", ""))
 
             submitted = st.form_submit_button("▶ Process JSON(s)")
 
@@ -366,8 +482,16 @@ elif workflow_step == "2. JSON Processing":
             else:
                 for json_file in json_paths:
                     logic2.add_variables_to_json(json_file, mutant_start, mutant_end, ligand_start, ligand_end)
-                st.success("All JSON files processed! Proceed to Step 3.")
+                st.session_state.update({
+                    "saved_mutant_start": mutant_start, "saved_mutant_end": mutant_end,
+                    "saved_ligand_start": ligand_start, "saved_ligand_end": ligand_end,
+                    "step2_done": True,
+                })
+                st.success("All JSON files processed!")
+        elif st.session_state.get("step2_done"):
+            st.success("All JSON files processed!")
 
+    next_step_button("3. OSPREY Execution", "Click to head to OSPREY Execution", ready=st.session_state.get("step2_done", False))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 3: OSPREY Execution  (unchanged)
@@ -390,30 +514,58 @@ elif workflow_step == "3. OSPREY Execution":
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Design Site")
-        target_res = st.selectbox("Select Residue to Mutate", residues)
-        all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'PRO', 'SER', 'THR']
+        prev_res = st.session_state.get("step3_target_res")
+        target_res = st.selectbox(
+            "Select Residue to Mutate", residues,
+            index=residues.index(prev_res) if prev_res in residues else 0,
+        )
+
+        # A different residue was chosen: clear the amino acid picks and the previous run's results
+        if prev_res is not None and prev_res != target_res:
+            st.session_state["saved_mutations"] = []
+            st.session_state.pop("step3_result", None)
+            st.session_state["step3_done"] = False
+        st.session_state["step3_target_res"] = target_res
+
+        all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR']
         wt_letter = target_res[-1].upper() if target_res else None
         wt_three_letter = AA_1TO3.get(wt_letter)
         if wt_three_letter:
             mutation_options = [aa for aa in all_aa_options if aa != wt_three_letter]
         else:
             mutation_options = all_aa_options
-        mutations = st.multiselect("Select Amino Acids", mutation_options)
+        mutations = st.multiselect(
+            "Select Amino Acids", mutation_options,
+            default=[m for m in st.session_state.get("saved_mutations", []) if m in mutation_options],
+        )
 
     with col2:
         st.subheader("Parameters")
-        epsilon = st.slider("K* Precision (Epsilon)", 0.01, 1.0, 0.99)
-        cores = st.number_input("CPU Cores", 1, 16, 4)
-        gpus = st.number_input("GPUs", min_value=0, max_value=8, value=0, step=1)
+        epsilon = st.slider("K* Precision (Epsilon)", 0.01, 1.0, st.session_state.get("saved_epsilon", 0.99))
+        cores = st.number_input("CPU Cores", 1, 16, st.session_state.get("saved_cores", 4))
+        gpus = st.number_input("GPUs", min_value=0, max_value=8, value=st.session_state.get("saved_gpus", 0), step=1)
         if gpus > 0:
-            streams_per_gpu = st.number_input("Streams per GPU", min_value=0, max_value=256, value=82, step=1)
+            streams_per_gpu = st.number_input("Streams per GPU", min_value=0, max_value=256,
+                                              value=st.session_state.get("saved_streams", 82), step=1)
+            st.session_state["saved_streams"] = streams_per_gpu
         else:
             streams_per_gpu = 0
             st.info("Streams per GPU set to 0 (no GPU detected)")
-        heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, 100000)
-        garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, 8192)
+        heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, st.session_state.get("saved_heap", 100000))
+        garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, st.session_state.get("saved_garbage", 8192))
+
+    # Remember the current inputs so they are still here when you come back to this step
+    st.session_state.update({
+        "saved_mutations": mutations,
+        "saved_epsilon":   epsilon,
+        "saved_cores":     cores,
+        "saved_gpus":      gpus,
+        "saved_heap":      heap_size,
+        "saved_garbage":   garbage_size,
+    })
 
     if st.button("Generate & Run OSPREY Script"):
+        st.session_state["step3_done"] = False 
 
         #-------At least one amino acid must be selected----#
         if not mutations:
@@ -432,29 +584,43 @@ elif workflow_step == "3. OSPREY Execution":
                     target_residue=target_res,
                     amino_acids=mutations
                 )
-            st.success(f"{len(generated)} OSPREY script(s) generated!")
-            for f in generated:
-                st.write(f"• {f}")
             st.session_state["osprey_scripts"] = generated
 
             with st.spinner("Running OSPREY (this may take a while)..."):
                 run_results = logic3.run_osprey_scripts(generated)
 
-            for r in run_results:
-                if "error" in r:
-                    st.error(f"❌ {r['script']}: {r['error']}")
-                elif r["returncode"] != 0:
-                    st.error(f"❌ {r['script']} failed:\n{r['stderr']}")
-                else:
-                    st.success(f"✅ {r['script']} completed")
-                    if r["stdout"]:
-                        with st.expander("View output"):
-                            st.code(r["stdout"])
-
+            st.session_state["step3_result"] = {
+                "target_res":  target_res,
+                "generated":   generated,
+                "run_results": run_results,
+            }
+            st.session_state["step3_done"] = all(
+                ("error" not in r) and r["returncode"] == 0 for r in run_results
+            )    
+                 
         except ValueError as e:
             st.error(f"❌ Setup error: {e}")
             st.stop()
 
+    # ── Show the latest run (persists when you leave and return) ──────────
+    res3 = st.session_state.get("step3_result")
+    if res3:
+        st.success(f"{len(res3['generated'])} OSPREY script(s) generated!")
+        for f in res3["generated"]:
+            st.write(f"• {f}")
+
+        for r in res3["run_results"]:
+            if "error" in r:
+                st.error(f"❌ {r['script']}: {r['error']}")
+            elif r["returncode"] != 0:
+                st.error(f"❌ {r['script']} failed:\n{r['stderr']}")
+            else:
+                st.success(f"✅ {r['script']} completed")
+                if r["stdout"]:
+                    with st.expander("View output"):
+                        st.code(r["stdout"])
+
+    next_step_button("4. Results & Analytics", "Click to head to Results & Analytics", ready=st.session_state.get("step3_done", False))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 4: Results & Analytics  (unchanged)
@@ -464,6 +630,7 @@ elif workflow_step == "4. Results & Analytics":
     st.header("Step 4: Redesign Results")
 
     osprey_scripts = st.session_state.get("osprey_scripts", [])
+    results_shown = False
 
     if not osprey_scripts:
         st.warning("No OSPREY scripts found. Please complete Step 3 first.")
@@ -591,6 +758,331 @@ elif workflow_step == "4. Results & Analytics":
                 file_name="osprey_redesign_results.csv",
                 mime="text/csv",
             )
+            results_shown = True
+
+    next_step_button("5. PyMOL Redesign", "Click to head to PyMOL Redesign", ready=results_shown)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Step 5: PyMOL Redesign
+# ═══════════════════════════════════════════════════════════════════════════════
+elif workflow_step == "5. PyMOL Redesign":
+    st.header("Step 5: Multi-Site Redesign (PyMOL)")
+    st.markdown(
+        "This step combines the best-scoring mutation from **selected** residue "
+        "sites you've scanned in Step 3 into a single structure."
+    )
+
+    osprey_scripts = st.session_state.get("osprey_scripts", [])
+    pdb_for_pymol  = st.session_state.get("path", None)
+
+    if not osprey_scripts or not pdb_for_pymol:
+        st.warning("No OSPREY scans found yet. Please complete Step 3 first.")
+        st.stop()
+
+    base_dir = os.path.dirname(os.path.dirname(osprey_scripts[0]))
+
+    if st.button("🔄 Check Scanned Sites"):
+        st.session_state.pop("pymol_pivot_delta", None)
+
+    if "pymol_pivot_delta" not in st.session_state:
+        with st.spinner("Aggregating mutation-scan results..."):
+            pivot_delta, _pivot_annot, _summary, error = logic4.analyze_results(base_dir)
+        if error:
+            st.error(f"Analysis Error: {error}")
+            st.stop()
+        st.session_state["pymol_pivot_delta"] = pivot_delta
+    else:
+        pivot_delta = st.session_state["pymol_pivot_delta"]
+
+    if pivot_delta is None or pivot_delta.empty:
+        st.warning("No residue sites found in analysis results. Run Step 3 first.")
+        st.stop()
+
+    available_sites = list(pivot_delta.index)
+
+    # ── Allow user to pick specific residue sites via multiselect ─────────────
+    st.subheader("🎯 Select Residues to Include")
+    selected_sites = st.multiselect(
+        "Choose specific residue sites to send to PyMOL:",
+        options=available_sites,
+        default=available_sites,  # Defaults to selecting all available sites
+        help="Select one or more residue sites to mutate."
+    )
+
+    if not selected_sites:
+        st.info("Please select at least one residue site above to proceed.")
+        st.stop()
+
+    # ── Preview the best mutation per selected site ───────────────────────────
+    try:
+        preview_mutations = logic6.select_best_mutations(pivot_delta, selected_sites=selected_sites)
+    except ValueError as e:
+        st.error(f"❌ {e}")
+        st.stop()
+
+    st.subheader(f"🏆 Best Mutation for {len(preview_mutations)} Selected Site(s)")
+    st.dataframe(
+        pd.DataFrame(preview_mutations)[["site", "chain", "resnum", "wt_aa3", "mutant_aa3", "delta"]]
+          .rename(columns={
+              "site": "Site", "chain": "Chain", "resnum": "Residue #",
+              "wt_aa3": "Wild-Type", "mutant_aa3": "Best Mutation", "delta": "ΔK*",
+          }),
+        use_container_width=True, hide_index=True,
+    )
+
+    st.caption(f"Structure to be mutated: `{pdb_for_pymol}`")
+
+    if st.button("🧬 Generate Redesigned Structure in PyMOL"):
+        try:
+            with st.spinner("Running PyMOL mutagenesis..."):
+                output_path, mutations, applied, errors = logic6.generate_redesigned_structure(
+                    pdb_for_pymol, pivot_delta, selected_sites=selected_sites
+                )
+            st.session_state["pymol_output_path"] = output_path
+
+            if applied:
+                st.success(f"✅ Applied {len(applied)} mutation(s):")
+                for a in applied:
+                    st.write(f"• {a}")
+            if errors:
+                st.warning("⚠️ Some sites could not be mutated:")
+                for err in errors:
+                    st.write(f"• {err}")
+
+            st.success(f"Redesigned PDB saved to: `{output_path}`")
+
+        except ImportError as e:
+            st.error(f"❌ {e}")
+        except ValueError as e:
+            st.error(f"❌ {e}")
+
+    output_path = st.session_state.get("pymol_output_path")
+    if output_path and os.path.exists(output_path):
+        with open(output_path, "rb") as f:
+            st.download_button(
+                label="📥 Download Redesigned PDB",
+                data=f.read(),
+                file_name=os.path.basename(output_path),
+                mime="chemical/x-pdb",
+            )
+    next_step_button("6. Molecular Dynamics", "Click to head to Molecular Dynamics (NAMD)",
+                     ready=bool(output_path and os.path.exists(output_path)))
+# ═══════════════════════════════════════════════════════════════════════════════
+# Step 6: Molecular Dynamics
+# ═══════════════════════════════════════════════════════════════════════════════
+elif workflow_step == "6. Molecular Dynamics":
+    st.header("Step 6: Molecular Dynamics — NAMD Package Generator")
+
+    st.markdown("""\
+    This step generates a **ready-to-run, explicit-solvent NAMD package** for your PDB structure.
+    The portal does not execute NAMD directly (simulations take hours to days on a GPU), but packages
+    everything your group needs — a solvated CHARMM PSF/PDB, a staged 4-part NAMD protocol
+    (minimize → heat → equilibrate → production), a launcher script, and MM/PBSA scaffolding —
+    so you can run it on your own GPU workstation/cluster **without VMD**.
+
+    > Fig. 2B tracks the N-domain ↔ C-domain distance over time.  
+    > - **wtCaM** → stays in *annealed* state (~0.5–1 nm) → normal regulation  
+    > - **RCaM1** → unlocks (~1.5–3 nm), bends RyR2 peptide → Ca²⁺ leak ↑  
+    > - **RCaM2** → stays locked and annealed → Ca²⁺ leak ↓ (therapeutic goal)
+    """)
+
+    st.divider()
+
+    # A: PDB source (PATH FIX: Checks Step 5 output first, falls back to Step 1)
+    st.subheader("A. Structure Source")
+    pdb_from_session = st.session_state.get("pymol_output_path") or st.session_state.get("path", None)
+    md_pdb_path = None
+
+    if pdb_from_session and os.path.exists(pdb_from_session):
+        source_label = "Step 5 (PyMOL Redesign)" if pdb_from_session == st.session_state.get("pymol_output_path") else "Step 1"
+        use_session = st.checkbox(
+            f"Use PDB from {source_label}: `{os.path.basename(pdb_from_session)}`", value=True)
+        if use_session:
+            md_pdb_path = pdb_from_session
+    else:
+        use_session = False
+
+    if not use_session or md_pdb_path is None:
+        uploaded_md_pdb = st.file_uploader("Upload PDB file for MD", type=["pdb"], key="md_pdb")
+        if uploaded_md_pdb:
+            os.makedirs("uploaded_pdbs", exist_ok=True)
+            md_pdb_path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_md_pdb.name))
+            with open(md_pdb_path, "wb") as fh:
+                fh.write(uploaded_md_pdb.getvalue())
+            st.success(f"Uploaded: `{md_pdb_path}`")
+    st.divider()
+
+    # B: Parameters
+    st.subheader("B. Simulation Parameters")
+    st.caption("Explicit TIP3P solvent only — matches the manuscript's GROMACS methodology. "
+               "(A previous version of this tool offered implicit GB solvent; that option was "
+               "removed because it does not reproduce the paper's setup.)")
+    col1, col2 = st.columns(2)
+    with col1:
+        temperature  = st.number_input("Temperature (K)", 270.0, 400.0, 297.15, step=5.0,
+                                        help="297.15 K = 24 °C — matches the SI Appendix's MD Methods "
+                                             "(not physiological 310 K).")
+        production_ns = st.number_input("PRODUCTION stage length (ns)", 0.1, 500.0, 100.0, step=0.1,
+                                        help="SI Appendix: production run of at least 100 ns. This is "
+                                             "on top of the fixed minimize/heat/equilibration stages, "
+                                             "not instead of them.")
+        timestep_fs  = float(st.selectbox("Timestep (fs)", [1.0, 2.0], index=1))
+    with col2:
+        nonbonded_cutoff = st.number_input("Non-bonded cutoff (Å)", 8.0, 20.0, 12.0, step=1.0)
+        gpu_enabled      = st.checkbox("Enable CUDA GPU acceleration", value=True,
+                                        help="Requires NAMD CUDA build — recommended for Windows + RTX/GTX")
+        padding_nm       = st.number_input("Water box padding (nm)", 0.8, 3.0, 1.0, step=0.1,
+                                        help="SI Appendix used a minimum 1.0 nm (10 Å) protein-to-box-edge "
+                                             "distance. Increase if your variant undergoes large conformational "
+                                             "excursions (e.g. RCaM1-like unlocking) to avoid self-interaction "
+                                             "across periodic images.")
+        ionic_strength   = st.number_input("Ionic strength (M KCl)", 0.0, 1.0, 0.15, step=0.05,
+                                        help="SI Appendix used KCl, not NaCl, at 0.15 M.")
+        protein_chain    = st.text_input("Protein chain ID", value="A")
+        ligand_chain     = st.text_input("Peptide/ligand chain ID", value="B")
+
+    st.session_state["md_timestep_fs"] = timestep_fs
+
+    st.divider()
+
+    # C: Generate (PATH & EXECUTION ROUTING FIX: Routes directly via logic7)
+    st.subheader("C. Generate NAMD Package")
+
+    if md_pdb_path is None:
+        st.info("Upload or select a PDB file in section A to enable package generation.")
+    else:
+        st.write(f"Ready to package: **`{os.path.basename(md_pdb_path)}`**")
+        st.caption("This step solvates the structure (TIP3P + ions), builds a CHARMM PSF, and writes a "
+                   "4-stage NAMD protocol (minimize → heat → restrained NPT equilibration → unrestrained "
+                   "NPT production) plus MM/PBSA scaffolding. Solvation runs here; NAMD itself does not — "
+                   "run the generated package on your own GPU workstation/cluster.")
+        if st.button("Generate NAMD Package"):
+            with st.spinner("Solvating system, building PSF, and writing staged NAMD configs... this can take a minute or two."):
+                out_dir = os.path.dirname(os.path.abspath(md_pdb_path))
+                try:
+                    # Routing execution to teammates' logic7
+                    md_func = getattr(logic7, "run_md_pipeline_from_pymol", None) or getattr(logic7, "build_full_package", None)
+                    if md_func is None:
+                        raise AttributeError("Neither 'run_md_pipeline_from_pymol' nor 'build_full_package' was found in logic7.py")
+
+                    result = md_func(
+                        pdb_path=md_pdb_path, output_dir=out_dir,
+                        padding_nm=padding_nm, ionic_strength_m=ionic_strength,
+                        protein_chain=protein_chain, ligand_chain=ligand_chain,
+                        temperature=temperature, production_ns=production_ns,
+                        timestep_fs=timestep_fs, nonbonded_cutoff=nonbonded_cutoff,
+                        gpu_enabled=gpu_enabled,
+                    )
+                except Exception as e:
+                    st.error(f"MD packaging failed: {e}")
+                    st.stop()
+            st.success(result["summary"])
+            if result.get("manifest", {}).get("warnings"):
+                for w in result["manifest"]["warnings"]:
+                    st.warning(w)
+            st.session_state["namd_result"] = result
+            st.session_state["md_dcd_freq"] = result.get("namd_package", {}).get("production_dcd_freq", 5000)
+
+            namd_dir = result["namd_package"]["namd_dir"]
+            labels = {"README": result["namd_package"]["readme_path"]}
+            for stage in result["namd_package"]["stages"]:
+                labels[f"NAMD config: {stage}"] = os.path.join(namd_dir, stage)
+            labels["Analysis script (analyze_distance.py)"] = result["namd_package"]["analysis_path"]
+            labels["Launcher (run_all_stages.sh)"] = result["namd_package"]["launcher_path"]
+            labels["MM/PBSA README"] = os.path.join(result["mmpbsa"]["mmpbsa_dir"], "README.txt")
+
+            for label, fpath in labels.items():
+                if os.path.exists(fpath):
+                    with st.expander(f"View: {label}"):
+                        with open(fpath) as fh:
+                            st.code(fh.read(), language="bash")
+
+            st.divider()
+            if "zip_path" in result and os.path.exists(result["zip_path"]):
+                with open(result["zip_path"], "rb") as zf:
+                    st.download_button(
+                        label="Download complete NAMD package (.zip)",
+                        data=zf.read(),
+                        file_name=os.path.basename(result["zip_path"]),
+                        mime="application/zip",
+                    )
+
+    st.divider()
+
+    # D: Upload & plot MD results
+    st.subheader("D. Visualise MD Results — N/C Domain Distance")
+    st.markdown("""\
+    After running NAMD and the `analyze_distance.py` script, upload `domain_distance.dat`
+    to plot the N-domain / C-domain distance over time (replicates manuscript Fig. 2B).
+    """)
+
+    dat_file = st.file_uploader("Upload domain_distance.dat", type=["dat","txt","csv"], key="dat_upload")
+    if dat_file:
+        import matplotlib.pyplot as plt
+
+        dat_text = dat_file.read().decode("utf-8")
+        rows     = logic6.parse_domain_distance_dat(dat_text)
+
+        if not rows:
+            st.error("Could not parse the file. Expected two columns: frame and distance (nm).")
+        else:
+            df = pd.DataFrame(rows)
+            ts = st.session_state.get("md_timestep_fs", 2.0)
+            dcd_freq = st.session_state.get("md_dcd_freq", 5000)  # falls back to this session's default if package wasn't generated in this run
+            df["time_ns"] = df["frame"] * dcd_freq * ts / 1_000_000
+
+            traj_label = st.text_input("Trajectory label (e.g. wtCaM, RCaM1, RCaM2)", value="My CaM")
+
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(df["time_ns"], df["distance_nm"], linewidth=1.0,
+                    label=traj_label, color="#6a0dad")
+            ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8,
+                       label="Annealed threshold (~1 nm)")
+            ax.set_xlabel("Time (ns)", fontsize=11)
+            ax.set_ylabel("N-C Domain Distance (nm)", fontsize=11)
+            ax.set_title("CaM N-domain / C-domain Distance Over Time", fontsize=12)
+            ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+            fig.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Mean distance", f"{df['distance_nm'].mean():.2f} nm")
+            c2.metric("Min distance",  f"{df['distance_nm'].min():.2f} nm")
+            c3.metric("Max distance",  f"{df['distance_nm'].max():.2f} nm")
+
+            annealed_pct = (df["distance_nm"] < 1.0).mean() * 100
+            st.caption(
+                f"Fraction of frames in annealed state (<1 nm): **{annealed_pct:.1f}%**  "
+                "(wtCaM/RCaM2 ≈ high, RCaM1 ≈ low)"
+            )
+
+    st.divider()
+
+    with st.expander("Quick-Start Reference — NAMD on Windows (no VMD needed)"):
+        st.markdown("""\
+**Required software (all free)**
+- [NAMD 2.14 multicore](https://www.ks.uiuc.edu/Research/namd/) — Win64, no GPU version works fine
+- [CHARMM36 force field](http://mackerell.umaryland.edu/charmm_ff.shtml) — `toppar_c36_jul22.tgz`
+- parmed + MDAnalysis — `pip install parmed MDAnalysis`
+
+**Steps after downloading the .zip**
+1. Extract the zip. Copy your PDB into the folder. Copy `top_all36_prot.rtf` and `par_all36_prot.prm` from the CHARMM36 download into the same folder.
+2. Generate the topology (replaces VMD psfgen):
+   `python generate_psf.py`
+3. Edit the `.namd` file — change `coordinates` to point to `{pdb_name}_prep.pdb`
+4. Launch NAMD:
+   `namd2.exe +p4 {pdb_name}.namd > {pdb_name}_md.log`
+5. After simulation, compute the domain distance:
+   `python analyze_distance.py`
+6. Upload `domain_distance.dat` to section D above.
+
+**Interpreting the distance plot**
+
+| CaM variant | Distance behavior | Biological meaning |
+|-------------|-------------------|-------------------|
+| wtCaM | Stays low (<1 nm), "annealed" | Normal RyR2 regulation |
+| RCaM1 | Rises high (>1.5 nm), "unlocked" | Bends RyR2 peptide → Ca²⁺ leak ↑ |
+| RCaM2 | Stays low, "locked annealed" | High affinity + straight peptide → Ca²⁺ leak ↓ |
+        """)
+
 
 # ── Sidebar footer ────────────────────────────────────────────────────────────
 st.sidebar.markdown("---")
