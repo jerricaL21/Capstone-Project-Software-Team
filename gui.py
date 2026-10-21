@@ -632,12 +632,14 @@ elif workflow_step == "4. Results & Analytics":
     osprey_scripts = st.session_state.get("osprey_scripts", [])
     results_shown = False
 
-    if not osprey_scripts:
-        st.warning("No OSPREY scripts found. Please complete Step 3 first.")
-    else:
-        base_dir = os.path.dirname(os.path.dirname(osprey_scripts[0]))
+    step3_data = st.session_state.get("step3_result")
 
-        pivot_delta, pivot_annot, summary_table, error = logic4.analyze_results(base_dir)
+    if not step3_data or "run_results" not in step3_data:
+        st.warning("No OSPREY simulation results found. Please run Step 3 first.")
+    else:
+        # Pass stdout execution results directly to logic4
+        run_results = step3_data["run_results"]
+        pivot_delta, pivot_annot, summary_table, error = logic4.analyze_results(run_results)
 
         if error:
             st.error(f"Analysis Error: {error}")
@@ -778,14 +780,15 @@ elif workflow_step == "5. PyMOL Redesign":
         st.warning("No OSPREY scans found yet. Please complete Step 3 first.")
         st.stop()
 
-    base_dir = os.path.dirname(os.path.dirname(osprey_scripts[0]))
+    step3_data = st.session_state.get("step3_result")
 
     if st.button("🔄 Check Scanned Sites"):
         st.session_state.pop("pymol_pivot_delta", None)
 
     if "pymol_pivot_delta" not in st.session_state:
         with st.spinner("Aggregating mutation-scan results..."):
-            pivot_delta, _pivot_annot, _summary, error = logic4.analyze_results(base_dir)
+            run_results = step3_data.get("run_results", []) if step3_data else []
+            pivot_delta, _pivot_annot, _summary, error = logic4.analyze_results(run_results)
         if error:
             st.error(f"Analysis Error: {error}")
             st.stop()
