@@ -5,28 +5,24 @@ import os
 import re
 import time
 import requests
+
 from io import StringIO
 from Bio import PDB, SeqIO
 from Bio.Align import PairwiseAligner
 
-
 def parse_pdb_compnd_header(pdb_path):
     """
     Parses COMPND header records in the PDB file to match MOLECULE names with CHAIN IDs.
-    Looks for Calmodulin / CaM vs RyR / Ligand keywords.
+    Looks for Calmodulin / CaM vs RyR / Ligand keywords and extracts molecule names.
     """
     compnd_data = {}
     current_mol = None
 
-    # Read the WHOLE COMPND header first and join the lines into one string.
-    # Names can wrap across lines (e.g. "...TYPE II ALPHA" / "CHAIN;"), so
-    # splitting line by line would cut a molecule name in half.
     compnd_lines = []
     with open(pdb_path, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             if line.startswith("COMPND"):
                 compnd_lines.append(line[10:].rstrip("\r\n").strip())
-            # Stop parsing once ATOM records start to save time
             elif line.startswith("ATOM") or line.startswith("HETATM"):
                 break
 
@@ -44,95 +40,92 @@ def parse_pdb_compnd_header(pdb_path):
             compnd_data[current_mol]["molecule"] += " " + token.split(":", 1)[-1].strip()
         elif token.startswith("CHAIN:") and current_mol:
             chains_str = token.split(":", 1)[-1].strip()
-            # Chains can be listed as "A", "A, B", etc.
             chains = [c.strip() for c in chains_str.split(",") if c.strip()]
             compnd_data[current_mol]["chains"].extend(chains)
 
     header_results = {}
     for mol_id, info in compnd_data.items():
-        mol_name = info["molecule"].upper()
+        mol_name = info["molecule"].strip()
+        mol_name_upper = mol_name.upper()
         for chain in info["chains"]:
-            # Whole-word CaM match, and reject names that merely *mention*
-            # calmodulin (binding peptides, calmodulin-dependent kinases, etc.)
             is_cam = (
-                bool(re.search(r"\b(CALMODULIN|CAM)\b", mol_name))
-                and not any(w in mol_name for w in ("BINDING", "DEPENDENT", "KINASE", "PEPTIDE"))
+                bool(re.search(r"\b(CALMODULIN|CAM)\b", mol_name_upper))
+                and not any(w in mol_name_upper for w in ("BINDING", "DEPENDENT", "KINASE", "PEPTIDE"))
             )
             header_results[chain] = {
-                "molecule_name": info["molecule"].strip(),
+                "molecule_name": mol_name,
                 "is_calmodulin": is_cam
             }
 
     return header_results
 
+
 def identify_calmodulin_chain(pdb_path):
+    """
+    Identifies protein chains using PDB header annotations.
+    If a molecule name is missing, compares that chain's
+    sequence against the human CaM reference sequence.
+    """
+    records = list(SeqIO.parse(pdb_path, "pdb-atom"))
 
-    # ── Convert PDB to FASTA using SeqIO pdb-atom parser ─────────────────────
-    records = list(SeqIO.parse(pdb_path, "pdb-atom")) # Converts the PDB file directly to FASTA format using BioPython's built-in pdb-atom parser. Returns one record per chain.
-
-    if not records: # Stops execution if no chains were found in the file.
+    if not records:
         raise ValueError("No protein chains found in PDB file.")
 
-    chain_seqs = {} # Empty dictionary to store chain ID 
-    for record in records: # loops over each chain found in the PDB file.
-        chain_id = record.id.split(":")[-1] if ":" in record.id else record.id # record.id is typically "????:A" (PDB ID + chain), extract chain letter
+    chain_seqs = {}
+    for record in records:
+        chain_id = record.id.split(":")[-1] if ":" in record.id else record.id
         seq = str(record.seq).replace("X", "")
         if seq:
-            chain_seqs[chain_id] = seq  # remove unknown residues
+            chain_seqs[chain_id] = seq
 
-    # ── Step A: Try header (COMPND) parsing first ────────────────────────────
+    header_info = {}
     try:
         header_info = parse_pdb_compnd_header(pdb_path)
-        # Verify that header parsing found chains and identified at least one Calmodulin
-        if header_info and any(data["is_calmodulin"] for data in header_info.values()):
-            results = {}
-            for chain_id, seq in chain_seqs.items():
-                is_cam = header_info.get(chain_id, {}).get("is_calmodulin", False)
-                results[chain_id] = {
-                    "sequence": seq,
-                    "length": len(seq),
-                    "identity": None, # Header match only: no alignment to human CaM was performed
-                    "is_calmodulin": is_cam
-                }
-            # Only trust the header result if it still found at least one CaM chain
-            if any(r["is_calmodulin"] for r in results.values()):
-                return results
     except Exception as e:
-        print(f"Header parsing failed or incomplete: {e}. Falling back to sequence alignment.")
+        print(f"Header parsing failed or incomplete: {e}.")
 
-    # ── Step B: Fallback to original sequence alignment against UniProt: Fetch calmodulin reference from UniProt in FASTA format (P0DP23 = human CaM-1) ───────
+    # Retrieve human CaM reference sequence
     url = "https://rest.uniprot.org/uniprotkb/P0DP23.fasta"
-    response = requests.get(url, timeout=15)
-    if not response.ok:
-        raise RuntimeError("Failed to download calmodulin reference from UniProt. Check your internet connection.")
-    cam_record = next(SeqIO.parse(StringIO(response.text), "fasta")) # Parses the downloaded FASTA text using SeqIO. StringIO wraps the text so SeqIO can read it like a file. 
-    cam_ref = str(cam_record.seq) # Extracts the calmodulin sequence as a plain string.    
+    try:
+        response = requests.get(url, timeout=15)
+        cam_record = next(SeqIO.parse(StringIO(response.text), "fasta")) if response.ok else None
+        cam_ref = str(cam_record.seq) if cam_record else None
+    except Exception:
+        cam_ref = None
 
-    # ── Align each chain against calmodulin reference ─────────────────────────
     aligner = PairwiseAligner()
     aligner.mode = "global"
 
     results = {}
     for chain_id, seq in chain_seqs.items():
+        mol_info = header_info.get(chain_id, {})
+        molecule_name = mol_info.get("molecule_name", "").strip()
+        is_cam_header = mol_info.get("is_calmodulin", False)
 
-        # line up the sequences first
-        best = aligner.align(seq, cam_ref)[0]
+        identity = None
+        is_cam_seq = False
 
-        # count matches
-        identical = 0
-        for (qs, qe), (rs, re_) in zip(best.aligned[0], best.aligned[1]):
-            for q_aa, r_aa in zip(seq[qs:qe], cam_ref[rs:re_]):
-                if q_aa == r_aa:
-                    identical += 1
+        # Only compare against human CaM if the header name is missing
+        if not molecule_name:
+            molecule_name = f"Unknown molecule (Chain {chain_id})"
+            if cam_ref:
+                best = aligner.align(seq, cam_ref)[0]
+                identical = 0
+                for (qs, qe), (rs, re_) in zip(best.aligned[0], best.aligned[1]):
+                    for q_aa, r_aa in zip(seq[qs:qe], cam_ref[rs:re_]):
+                        if q_aa == r_aa:
+                            identical += 1
+                identity = round((identical / len(cam_ref)) * 100, 1)
+                is_cam_seq = identity >= 80
 
-        # score = how many matched out of total
-        identity = (identical / len(cam_ref)) * 100
+        is_cam = is_cam_header or is_cam_seq
 
         results[chain_id] = {
-            "sequence":      seq, # the full amino acid sequence of this chain
-            "length":        len(seq), # how long the sequence is (number of amino acids)
-            "identity":      round(identity, 1), # the match % rounded to 1 decimal e.g. 87.2
-            "is_calmodulin": identity >= 80 # True if match is 80% or higher, False if not
+            "sequence": seq,
+            "length": len(seq),
+            "identity": identity,
+            "is_calmodulin": is_cam,
+            "molecule_name": molecule_name
         }
 
     return results
