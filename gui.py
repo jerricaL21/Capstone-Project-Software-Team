@@ -494,7 +494,7 @@ elif workflow_step == "2. JSON Processing":
     next_step_button("3. OSPREY Execution", "Click to head to OSPREY Execution", ready=st.session_state.get("step2_done", False))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 3: OSPREY Execution  (unchanged)
+# Step 3: OSPREY Execution
 # ═══════════════════════════════════════════════════════════════════════════════
 elif workflow_step == "3. OSPREY Execution":
     st.header("Step 3: OSPREY Simulation Setup")
@@ -514,28 +514,37 @@ elif workflow_step == "3. OSPREY Execution":
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Design Site")
-        prev_res = st.session_state.get("step3_target_res")
-        target_res = st.selectbox(
-            "Select Residue to Mutate", residues,
-            index=residues.index(prev_res) if prev_res in residues else 0,
+        
+        prev_targets = st.session_state.get("step3_target_res", [])
+        if isinstance(prev_targets, str):
+            prev_targets = [prev_targets]
+
+        target_residues = st.multiselect(
+            "Select Residues to Mutate", 
+            options=residues,
+            default=[r for r in prev_targets if r in residues]
         )
 
-        # A different residue was chosen: clear the amino acid picks and the previous run's results
-        if prev_res is not None and prev_res != target_res:
+        if prev_targets != target_residues:
             st.session_state["saved_mutations"] = []
             st.session_state.pop("step3_result", None)
             st.session_state["step3_done"] = False
-        st.session_state["step3_target_res"] = target_res
+        st.session_state["step3_target_res"] = target_residues
 
         all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR']
-        wt_letter = target_res[-1].upper() if target_res else None
-        wt_three_letter = AA_1TO3.get(wt_letter)
-        if wt_three_letter:
-            mutation_options = [aa for aa in all_aa_options if aa != wt_three_letter]
-        else:
-            mutation_options = all_aa_options
+        
+        wt_three_letters = set()
+        for res in target_residues:
+            wt_letter = res[-1].upper() if res else None
+            wt_3 = AA_1TO3.get(wt_letter)
+            if wt_3:
+                wt_three_letters.add(wt_3)
+
+        mutation_options = [aa for aa in all_aa_options if aa not in wt_three_letters]
+
         mutations = st.multiselect(
-            "Select Amino Acids", mutation_options,
+            "Select Amino Acids", 
+            mutation_options,
             default=[m for m in st.session_state.get("saved_mutations", []) if m in mutation_options],
         )
 
@@ -554,7 +563,6 @@ elif workflow_step == "3. OSPREY Execution":
         heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, st.session_state.get("saved_heap", 100000))
         garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, st.session_state.get("saved_garbage", 8192))
 
-    # Remember the current inputs so they are still here when you come back to this step
     st.session_state.update({
         "saved_mutations": mutations,
         "saved_epsilon":   epsilon,
@@ -567,47 +575,83 @@ elif workflow_step == "3. OSPREY Execution":
     if st.button("Generate & Run OSPREY Script"):
         st.session_state["step3_done"] = False 
 
-        #-------At least one amino acid must be selected----#
+        if not target_residues:
+            st.error("❌ Please select at least one residue to mutate.")
+            st.stop()
         if not mutations:
             st.error("❌ Please select at least one amino acid before running OSPREY.")
             st.stop()
+            
+        all_generated_scripts = []
+        all_run_results = []
+        total_residues = len(target_residues)
+
         try:
-            with st.spinner("Generating OSPREY Script..."):
-                generated = logic3.create_folders_and_files(
-                    json_path, pdb_path,
-                    epsilon=epsilon,
-                    cpu_cores=int(cores),
-                    gpus=int(gpus),
-                    streams_per_gpu=int(streams_per_gpu),
-                    heap_size=int(heap_size),
-                    garbage_size=int(garbage_size),
-                    target_residue=target_res,
-                    amino_acids=mutations
-                )
-            st.session_state["osprey_scripts"] = generated
+            # ── Progress Tracking Containers ─────────────────────────────
+            progress_bar = st.progress(0.0)
+            status_text = st.empty()
+            
+            for idx, res in enumerate(target_residues, start=1):
+                # Calculate progress ratio (0.0 to 1.0)
+                progress_ratio = idx / total_residues
+                
+                # Update status message with residue counter and percentage
+                status_text.info(f"⏳ Processing residue **{res}** ({idx}/{total_residues} — {int((idx-1)/total_residues * 100)}% complete)")
+                
+                res_wt_letter = res[-1].upper()
+                res_wt_3 = AA_1TO3.get(res_wt_letter)
+                res_mutations = [aa for aa in mutations if aa != res_wt_3]
+                
+                if not res_mutations:
+                    st.warning(f"Skipping {res}: Selected mutations match wild-type.")
+                    progress_bar.progress(progress_ratio)
+                    continue
 
-            with st.spinner("Running OSPREY (this may take a while)..."):
-                run_results = logic3.run_osprey_scripts(generated)
+                with st.spinner(f"Generating OSPREY script for residue {res}..."):
+                    generated = logic3.create_folders_and_files(
+                        json_path, pdb_path,
+                        epsilon=epsilon,
+                        cpu_cores=int(cores),
+                        gpus=int(gpus),
+                        streams_per_gpu=int(streams_per_gpu),
+                        heap_size=int(heap_size),
+                        garbage_size=int(garbage_size),
+                        target_residue=res,
+                        amino_acids=res_mutations
+                    )
+                    all_generated_scripts.extend(generated)
 
+                with st.spinner(f"Running OSPREY simulation for residue {res}..."):
+                    run_results = logic3.run_osprey_scripts(generated)
+                    all_run_results.extend(run_results)
+                
+                # Advance progress bar after residue processing completes
+                progress_bar.progress(progress_ratio)
+
+            # Final status update upon loop completion
+            status_text.success(f"✅ Successfully finished running all {total_residues} residue(s)!")
+            
+            st.session_state["osprey_scripts"] = all_generated_scripts
             st.session_state["step3_result"] = {
-                "target_res":  target_res,
-                "generated":   generated,
-                "run_results": run_results,
+                "target_res":  target_residues,
+                "generated":   all_generated_scripts,
+                "run_results": all_run_results,
             }
             st.session_state["step3_done"] = all(
-                ("error" not in r) and r["returncode"] == 0 for r in run_results
-            )    
-                 
+                ("error" not in r) and r["returncode"] == 0 for r in all_run_results
+            ) if all_run_results else False
+
         except ValueError as e:
             st.error(f"❌ Setup error: {e}")
             st.stop()
 
-    # ── Show the latest run (persists when you leave and return) ──────────
+    # ── Show latest runs ──────────────────────────────────────────────────
     res3 = st.session_state.get("step3_result")
     if res3:
-        st.success(f"{len(res3['generated'])} OSPREY script(s) generated!")
-        for f in res3["generated"]:
-            st.write(f"• {f}")
+        st.success(f"{len(res3['generated'])} total OSPREY script(s) generated across selected residues!")
+        with st.expander("View generated script files"):
+            for f in res3["generated"]:
+                st.write(f"• {f}")
 
         for r in res3["run_results"]:
             if "error" in r:
@@ -617,7 +661,7 @@ elif workflow_step == "3. OSPREY Execution":
             else:
                 st.success(f"✅ {r['script']} completed")
                 if r["stdout"]:
-                    with st.expander("View output"):
+                    with st.expander(f"View output for {r['script']}"):
                         st.code(r["stdout"])
 
     next_step_button("4. Results & Analytics", "Click to head to Results & Analytics", ready=st.session_state.get("step3_done", False))
@@ -744,7 +788,7 @@ elif workflow_step == "4. Results & Analytics":
 
             AMINO_ACIDS = [
                 "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
-                "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+                "LEU", "LYS", "MET", "PHE", "SER", "THR", "TRP", "TYR", "VAL",
             ]
 
             # --- Parse summary_table into one row per mutation ---
