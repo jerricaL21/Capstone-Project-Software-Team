@@ -1,0 +1,110 @@
+OSPREY 3.2.304, Python 3.11.16, Java 17.0.12, Windows-10-10.0.26200-SP0
+Using up to 100000 MiB heap memory: 8192 MiB for garbage, 91808 MiB for storage
+read PDB file from file: D:/Jerrica's Branch of Capstone-Project-Software-Team/Capstone-Project-Software-Team/davisLab_Software/GUI_results/6Y4O/pdb_files/6Y4O_sidechain_fixed_rotamers_fixed.pdb
+WARNING: 1 Strand residue(s) could not be matched to templates and were automatically deleted:
+HIE B3621
+Calculating reference energies for 40 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 265.1 ms
+Calculating energy matrix with 404 entries
+Progress:  100.0%   ETA: 67.0 ms
+Finished in 1.4 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\6Y4O\osprey_output\out\A41Q\emat.protein.dat
+Calculating energy matrix with 404 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 379.9 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\6Y4O\osprey_output\out\A41Q\emat.protein.rigid.dat
+Calculating reference energies for 39 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 20.2 ms
+Calculating energy matrix with 179 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 410.7 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\6Y4O\osprey_output\out\A41Q\emat.ligand.dat
+Calculating energy matrix with 179 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 42.9 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\6Y4O\osprey_output\out\A41Q\emat.ligand.rigid.dat
+Calculating reference energies for 79 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 86.4 ms
+Calculating energy matrix with 2143 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 4.0 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\6Y4O\osprey_output\out\A41Q\emat.complex.dat
+Calculating energy matrix with 2143 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 873.8 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\6Y4O\osprey_output\out\A41Q\emat.complex.rigid.dat
+computing K* score for the wild-type sequence...
+sequence    0/   0   A41=gln   K*(log10): 10.620753 in [9.078330 ,11.603413] (log10)   protein: [14.325071,14.921377] (log10)                   , numConfs:    6, delta: 0.747   ligand: [7.747118 , 8.693236] (log10)                   , numConfs:    6, delta: 0.887   complex: [32.692943,33.675602] (log10)                   , numConfs:    5, delta: 0.896
+computing K* scores for the 5 best sequences to epsilon = 0.99 ...
+Refining sequence 
+Refining sequence A41=gln
+sequence    1/   5   A41=gln   K*(log10): 10.620753 in [9.078330 ,11.603413] (log10)   protein: [14.325071,14.921377] (log10)                   , numConfs:    6, delta: 0.747   ligand: [7.747118 , 8.693236] (log10)                   , numConfs:    6, delta: 0.887   complex: [32.692943,33.675602] (log10)                   , numConfs:    5, delta: 0.896
+Refining sequence A41=LEU
+sequence    2/   5   A41=LEU   K*(log10): 10.231368 in [8.865056 ,10.869597] (log10)   protein: [13.860990,14.281184] (log10)                   , numConfs:    6, delta: 0.620   ligand: [7.747118 , 8.693236] (log10)                   , numConfs:    6, delta: 0.887   complex: [31.839476,32.477705] (log10)                   , numConfs:    6, delta: 0.770
+Refining sequence A41=ILE
+sequence    3/   5   A41=ILE   K*(log10): 10.263557 in [9.134704 ,10.680892] (log10)   protein: [14.452183,14.634918] (log10)                   , numConfs:    5, delta: 0.343   ligand: [7.747118 , 8.693236] (log10)                   , numConfs:    6, delta: 0.887   complex: [32.462858,32.880193] (log10)                   , numConfs:    5, delta: 0.617
+Refining sequence A41=VAL
+sequence    4/   5   A41=VAL   K*(log10): 9.980884  in [9.034766 ,10.195684] (log10)   protein: [13.023466,13.023466] (log10)                   , numConfs:    5, delta: 0.000   ligand: [7.747118 , 8.693236] (log10)                   , numConfs:    6, delta: 0.887   complex: [30.751468,30.966268] (log10)                   , numConfs:    6, delta: 0.390
+Refining sequence A41=ALA
+sequence    5/   5   A41=ALA   K*(log10): 9.798468  in [8.852349 ,10.039740] (log10)   protein: [12.263793,12.263793] (log10)                   , numConfs:    5, delta: 0.000   ligand: [7.747118 , 8.693236] (log10)                   , numConfs:    6, delta: 0.887   complex: [29.809378,30.050651] (log10)                   , numConfs:    6, delta: 0.426
+result:
+	sequence: A41=gln
+	K* score: 10.620753 in [9.078330 ,11.603413] (log10)
+Residues           A36   A41   B3633 B3637complex Sequence   gln  
+Ensemble of 5 conformations:
+	1/5     Energy: -44.120102       Score: -45.656082       Rotamers: W0 W0 W0 W0     Residue Conf IDs: 13    25    3     34   
+	2/5     Energy: -43.848683       Score: -45.318967       Rotamers: W0 W0 W0 L32     Residue Conf IDs: 13    25    3     32   
+	3/5     Energy: -43.835420       Score: -45.443893       Rotamers: W0 W0 W0 L25     Residue Conf IDs: 13    25    3     25   
+	4/5     Energy: -42.887295       Score: -44.701849       Rotamers: W0 L6 W0 W0     Residue Conf IDs: 13    6     3     34   
+	5/5     Energy: -42.235370       Score: -45.111526       Rotamers: W0 W0 W0 L30     Residue Conf IDs: 13    25    3     30   
+
+result:
+	sequence: A41=LEU
+	K* score: 10.231368 in [8.865056 ,10.869597] (log10)
+Residues           A36   A41   B3633 B3637complex Sequence   LEU  
+Ensemble of 6 conformations:
+	1/6     Energy: -43.024095       Score: -44.667935       Rotamers: W0 L4 W0 L32     Residue Conf IDs: 13    24    3     32   
+	2/6     Energy: -42.887130       Score: -44.493791       Rotamers: W0 L3 W0 L32     Residue Conf IDs: 13    23    3     32   
+	3/6     Energy: -41.910477       Score: -43.498739       Rotamers: W0 L4 L1 L32     Residue Conf IDs: 13    24    1     32   
+	4/6     Energy: -41.775418       Score: -43.328488       Rotamers: W0 L3 L1 L32     Residue Conf IDs: 13    23    1     32   
+	5/6     Energy: -41.526294       Score: -43.184498       Rotamers: W0 L4 W0 W0     Residue Conf IDs: 13    24    3     34   
+	6/6     Energy: -39.484232       Score: -42.884810       Rotamers: W0 L3 W0 W0     Residue Conf IDs: 13    23    3     34   
+
+result:
+	sequence: A41=ILE
+	K* score: 10.263557 in [9.134704 ,10.680892] (log10)
+Residues           A36   A41   B3633 B3637complex Sequence   ILE  
+Ensemble of 5 conformations:
+	1/5     Energy: -43.975906       Score: -45.098092       Rotamers: W0 L4 W0 L32     Residue Conf IDs: 13    17    3     32   
+	2/5     Energy: -43.616467       Score: -44.809234       Rotamers: W0 L5 W0 L32     Residue Conf IDs: 13    18    3     32   
+	3/5     Energy: -42.864135       Score: -43.937048       Rotamers: W0 L4 L1 L32     Residue Conf IDs: 13    17    1     32   
+	4/5     Energy: -42.503610       Score: -43.641807       Rotamers: W0 L5 L1 L32     Residue Conf IDs: 13    18    1     32   
+	5/5     Energy: -41.955911       Score: -43.553736       Rotamers: W0 L4 W0 W0     Residue Conf IDs: 13    17    3     34   
+
+result:
+	sequence: A41=VAL
+	K* score: 9.980884  in [9.034766 ,10.195684] (log10)
+Residues           A36   A41   B3633 B3637complex Sequence   VAL  
+Ensemble of 6 conformations:
+	1/6     Energy: -41.856841       Score: -42.946997       Rotamers: W0 L1 W0 L32     Residue Conf IDs: 13    11    3     32   
+	2/6     Energy: -40.742720       Score: -41.785901       Rotamers: W0 L1 L1 L32     Residue Conf IDs: 13    11    1     32   
+	3/6     Energy: -39.835139       Score: -40.789231       Rotamers: L7 L1 W0 L32     Residue Conf IDs: 7     11    3     32   
+	4/6     Energy: -39.776751       Score: -41.404709       Rotamers: W0 L1 W0 W0     Residue Conf IDs: 13    11    3     34   
+	5/6     Energy: -39.762868       Score: -41.012715       Rotamers: W0 L1 W0 L30     Residue Conf IDs: 13    11    3     30   
+	6/6     Energy: -39.241306       Score: -40.737942       Rotamers: W0 L1 W0 L29     Residue Conf IDs: 13    11    3     29   
+
+result:
+	sequence: A41=ALA
+	K* score: 9.798468  in [8.852349 ,10.039740] (log10)
+Residues           A36   A41   B3633 B3637complex Sequence   ALA  
+Ensemble of 6 conformations:
+	1/6     Energy: -40.532481       Score: -41.707149       Rotamers: W0 L W0 L32     Residue Conf IDs: 13    9     3     32   
+	2/6     Energy: -39.414775       Score: -40.545255       Rotamers: W0 L L1 L32     Residue Conf IDs: 13    9     1     32   
+	3/6     Energy: -38.979712       Score: -39.519326       Rotamers: L7 L W0 L32     Residue Conf IDs: 7     9     3     32   
+	4/6     Energy: -38.968854       Score: -40.053246       Rotamers: W0 L W0 W0     Residue Conf IDs: 13    9     3     34   
+	5/6     Energy: -38.362028       Score: -39.681412       Rotamers: W0 L W0 L30     Residue Conf IDs: 13    9     3     30   
+	6/6     Energy: -38.152643       Score: -39.499787       Rotamers: W0 L W0 L25     Residue Conf IDs: 13    9     3     25   
+

@@ -6,6 +6,25 @@ import io
 
 SCORE_COLS = ['K* Lower (log10)', 'K* Score (Log10)', 'K* Score (log10)']
 
+# ── CHANGED: new constants for reading saved OSPREY stdout ───────────────────
+STDOUT_FILENAME = "osprey_stdout.txt"
+
+STDOUT_PATTERN = re.compile(
+    r"sequence\s+\d+/\s+\d+\s+([A-Za-z0-9_=]+)\s+K\*\([^\)]*\):\s*([\d\.\-]+)"
+)
+
+AA_1TO3 = {
+    'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS',
+    'Q': 'GLN', 'E': 'GLU', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE',
+    'L': 'LEU', 'K': 'LYS', 'M': 'MET', 'F': 'PHE', 'P': 'PRO',
+    'S': 'SER', 'T': 'THR', 'W': 'TRP', 'Y': 'TYR', 'V': 'VAL',
+}
+
+
+class StdoutParseError(Exception):
+    """Raised when a residue's saved OSPREY stdout is missing or unreadable."""
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 def get_tsv_files_paths(base_dir):
     """Finds all OSPREY results files in the directory tree."""
@@ -137,37 +156,114 @@ def check_run_completeness(base_dir, residues=None):
     return warnings
 
 
+# ── CHANGED: new functions that read the saved stdout ────────────────────────
+def get_residue_folders(base_dir, residues=None):
+    """Finds residue folders (the ones containing a bbkstar_results TSV or a saved stdout file)."""
+    folders = set()
+    for root, _, files in os.walk(base_dir):
+        if STDOUT_FILENAME in files or any(
+            f.endswith(".tsv") and "bbkstar_results" in f for f in files
+        ):
+            folders.add(root)
+    if residues is not None:
+        wanted = set(residues)
+        folders = {f for f in folders if os.path.basename(f) in wanted}
+    return sorted(folders)
+
+
+def read_stdout_data(folder):
+    """
+    Parses <folder>/osprey_stdout.txt.
+    The wild-type line is found by amino-acid name (from the folder name, e.g. A38S -> SER),
+    not by position. Raises StdoutParseError (never falls back to the TSV).
+    """
+    residue = os.path.basename(folder)
+    stdout_path = os.path.join(folder, STDOUT_FILENAME)
+
+    if not os.path.exists(stdout_path):
+        raise StdoutParseError(
+            f"{residue}: no saved OSPREY stdout found at '{stdout_path}'. "
+            f"The run either did not finish or its output was not saved in Step 3."
+        )
+
+    with open(stdout_path, "r", encoding="utf-8", errors="ignore") as f:
+        text = f.read()
+
+    if not text.strip():
+        raise StdoutParseError(f"{residue}: '{stdout_path}' is empty.")
+
+    matches = STDOUT_PATTERN.findall(text)
+    if not matches:
+        raise StdoutParseError(
+            f"{residue}: no 'sequence N/M <SEQ> K*(...): <score>' lines found in "
+            f"'{stdout_path}'. The OSPREY output format may have changed or the run crashed."
+        )
+
+    # Work out the wild-type amino acid from the folder name (e.g. A38S -> SER)
+    m = re.fullmatch(r"([A-Za-z])(\d+)([A-Za-z])", residue)
+    if not m:
+        raise StdoutParseError(
+            f"{residue}: folder name is not like 'A38S', so the wild-type amino acid cannot be determined."
+        )
+    wt_aa = AA_1TO3.get(m.group(3).upper())
+    if wt_aa is None:
+        raise StdoutParseError(f"{residue}: '{m.group(3)}' is not a standard amino acid letter.")
+
+    # Find the line for the wild-type amino acid, wherever it appears
+    wt_entry = next(
+        ((seq, sc) for seq, sc in matches if seq.split("=")[-1].upper() == wt_aa),
+        None,
+    )
+    if wt_entry is None:
+        raise StdoutParseError(
+            f"{residue}: no wild-type line ({wt_aa}) found in '{stdout_path}', "
+            f"so ΔK* cannot be calculated."
+        )
+
+    wt_seq, wt_score_str = wt_entry
+    wt_score = float(wt_score_str)
+    wt_full = f"{wt_seq.split('=')[0]}={wt_aa}"
+
+    seen, results = set(), []
+    for seq, score_str in matches:
+        mut_aa = seq.split("=")[-1].upper()
+        if mut_aa in seen:
+            continue
+        seen.add(mut_aa)
+        score = float(score_str)
+        results.append({
+            "WT_Full": wt_full,
+            "Mutation": mut_aa,
+            "Score": round(score, 3),
+            "Delta": round(score - wt_score, 3),
+        })
+    return results
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def analyze_results(base_dir, residues=None):
     """
     THIS IS THE FUNCTION CALLED BY gui.py
-    Processes all files and returns (pivot_delta, pivot_annot, summary_df, error_msg)
+    Returns (pivot_delta, pivot_annot, summary_df, error_msg).
+    CHANGED: reads ONLY the saved OSPREY stdout in each residue folder (no TSV fallback).
 
     residues : optional collection of residue keys (e.g. {"A38S", "A41Q"}). When given,
                only results from those residue folders are included, so leftover output
                from earlier sessions doesn't show up.
     """
-    tsv_files_paths = get_tsv_files_paths(base_dir)
-    if residues is not None:
-        wanted = set(residues)
-        tsv_files_paths = [p for p in tsv_files_paths
-                           if os.path.basename(os.path.dirname(p)) in wanted]
-    if not tsv_files_paths:
-        return None, None, None, "No TSV files found in output directory."
+    folders = get_residue_folders(base_dir, residues)
+    if not folders:
+        return None, None, None, "No residue result folders found in output directory."
 
-    unique_fragments = set()
-    all_rows = []
+    all_rows, errors = [], []
+    for folder in folders:
+        try:
+            all_rows.extend(read_stdout_data(folder))
+        except StdoutParseError as e:
+            errors.append(str(e))
 
-    for path in tsv_files_paths:
-        fragment = extract_unique_name_fragments(path, unique_fragments)
-        data_list = read_file_data(path)
-
-        if data_list and fragment:
-            for item in data_list:
-                item['Fragment'] = fragment
-                all_rows.append(item)
-
-    if not all_rows:
-        return None, None, None, "No valid data found inside TSV files."
+    if errors:
+        return None, None, None, "\n".join(errors)
 
     master_df = pd.DataFrame(all_rows)
 

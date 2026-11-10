@@ -74,7 +74,7 @@ templateLib = osprey.TemplateLibrary(ffparams.forcefld)
 
 # define the protein strand
 protein = osprey.Strand(mol, templateLib=templateLib, residues=['A0', 'A148'])
-protein.flexibility['A38'].setLibraryRotamers(osprey.WILD_TYPE, 'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'THR').addWildTypeRotamers().setContinuous()
+protein.flexibility['A38'].setLibraryRotamers(osprey.WILD_TYPE, 'ALA', 'VAL', 'ILE', 'LEU').addWildTypeRotamers().setContinuous()
 
 protein.flexibility['A39'].setLibraryRotamers(osprey.WILD_TYPE).addWildTypeRotamers().setContinuous()
 
@@ -108,7 +108,7 @@ bbkstar = osprey.BBKStar(
     proteinConfSpace,
     ligandConfSpace,
     complexConfSpace,
-    numBestSequences=19,
+    numBestSequences=5,
     writeSequencesToConsole=True,
     writeSequencesToFile='bbkstar_results_out_A38S.tsv',
     epsilon=0.99,

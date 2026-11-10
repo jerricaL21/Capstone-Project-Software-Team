@@ -690,6 +690,13 @@ elif workflow_step == "3. OSPREY Execution":
             with st.spinner("Running OSPREY (this may take a while)..."):
                 run_results = logic3.run_osprey_scripts(generated)
 
+            # ── CHANGED: save each run's stdout into its residue folder ──
+            for r in run_results:
+                if r.get("stdout"):
+                    out_dir = os.path.dirname(os.path.abspath(r["script"]))
+                    with open(os.path.join(out_dir, "osprey_stdout.txt"), "w", encoding="utf-8") as f:
+                        f.write(r["stdout"])
+
             st.session_state["step3_result"] = {
                 "target_res":  target_res,
                 "generated":   generated,
@@ -751,7 +758,10 @@ elif workflow_step == "4. Results & Analytics":
     else:
         # Pass stdout execution results directly to logic4
         base_dir = st.session_state.get("osprey_dir")
-        pivot_delta, pivot_annot, summary_table, error = logic4.analyze_results(base_dir)
+        # ── CHANGED: only include residues scanned in this session ──
+        pivot_delta, pivot_annot, summary_table, error = logic4.analyze_results(
+            base_dir, residues=st.session_state.get("scanned_residues")
+        )
 
     
         if error:
