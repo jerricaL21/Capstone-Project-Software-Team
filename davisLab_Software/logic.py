@@ -229,7 +229,7 @@ def run_prppi(pdb_path, cutoff=5.0, groups=None, cam_info=None,
         cwd=working_dir
     )
 
-    stdout, stderr = process.communicate(input="\n", timeout=60)
+    stdout, stderr = process.communicate(input="\n")
 
     if "nano" not in stderr and process.returncode != 0:
         raise RuntimeError(f"prppi failed:\n{stderr}")

@@ -1,0 +1,300 @@
+OSPREY 3.2.304, Python 3.11.16, Java 17.0.12, Windows-10-10.0.26200-SP0
+Using up to 100000 MiB heap memory: 8192 MiB for garbage, 91808 MiB for storage
+read PDB file from file: D:/Jerrica's Branch of Capstone-Project-Software-Team/Capstone-Project-Software-Team/davisLab_Software/GUI_results/4Q5U/pdb_files/4Q5U_sidechain_fixed_rotamers_fixed.pdb
+WARNING: 2 Strand residue(s) could not be matched to templates and were automatically deleted:
+GLN A   3
+HIE A 107
+Calculating reference energies for 201 residue confs...
+Progress:  100.0%   ETA: 100.0 ms
+Finished in 1.3 s
+Calculating energy matrix with 2819 entries
+Progress:   43.4%   ETA: 5.9 s
+Progress:  100.0%   ETA: 604.0 ms
+Finished in 9.9 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A54E\emat.protein.dat
+Calculating energy matrix with 2819 entries
+Progress:  100.0%   ETA: 52.0 ms
+Finished in 1.5 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A54E\emat.protein.rigid.dat
+Calculating reference energies for 4 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 7.8 ms
+Calculating energy matrix with 4 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 36.8 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A54E\emat.ligand.dat
+Calculating energy matrix with 4 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 4.5 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A54E\emat.ligand.rigid.dat
+Calculating reference energies for 205 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 160.4 ms
+Calculating energy matrix with 3627 entries
+Progress:   44.2%   ETA: 5.6 s
+Progress:   93.7%   ETA: 1.4 s
+Progress:  100.0%   ETA: 200.0 ms
+Finished in 11.1 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A54E\emat.complex.dat
+Calculating energy matrix with 3627 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 1.9 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A54E\emat.complex.rigid.dat
+computing K* score for the wild-type sequence...
+sequence    0/   0   A54=glu   K*(log10): 6.914359  in [6.369248 , 7.480622] (log10)   protein: [8.233385 , 8.778496] (log10)                   , numConfs:    5, delta: 0.715   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [20.689915,21.256178] (log10)                   , numConfs:    6, delta: 0.729
+computing K* scores for the 19 best sequences to epsilon = 0.99 ...
+Refining sequence 
+Refining sequence A54=glu
+sequence    1/  19   A54=glu   K*(log10): 6.914359  in [6.369248 , 7.480622] (log10)   protein: [8.233385 , 8.778496] (log10)                   , numConfs:    5, delta: 0.715   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [20.689915,21.256178] (log10)                   , numConfs:    6, delta: 0.729
+Refining sequence A54=THR
+sequence    2/  19   A54=THR   K*(log10): 5.959663  in [5.128940 , 6.768448] (log10)   protein: [9.990587 ,10.821310] (log10)                   , numConfs:    5, delta: 0.852   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [21.492421,22.301206] (log10)                   , numConfs:    5, delta: 0.845
+Refining sequence A54=ASP
+sequence    3/  19   A54=ASP   K*(log10): 6.600389  in [6.562404 , 6.601444] (log10)   protein: [8.312325 , 8.350310] (log10)                   , numConfs:    5, delta: 0.084   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [20.454885,20.455939] (log10)                   , numConfs:    5, delta: 0.002
+Refining sequence A54=GLN
+sequence    4/  19   A54=GLN   K*(log10): 5.806308  in [5.701099 , 6.447090] (log10)   protein: [11.746960,11.852169] (log10)                   , numConfs:    5, delta: 0.215   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [23.095439,23.736221] (log10)                   , numConfs:    5, delta: 0.771
+Refining sequence A54=ASN
+sequence    5/  19   A54=ASN   K*(log10): 5.566509  in [5.127311 , 6.397974] (log10)   protein: [11.253359,11.692558] (log10)                   , numConfs:    5, delta: 0.636   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [22.362039,23.193504] (log10)                   , numConfs:    5, delta: 0.853
+Refining sequence A54=TYR
+sequence    6/  19   A54=TYR   K*(log10): 5.623295  in [5.191978 , 6.188999] (log10)   protein: [11.794716,12.226033] (log10)                   , numConfs:    6, delta: 0.630   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [22.960181,23.525886] (log10)                   , numConfs:    6, delta: 0.728
+Refining sequence A54=MET
+sequence    7/  19   A54=MET   K*(log10): 5.765012  in [4.881362 , 6.045833] (log10)   protein: [12.362139,13.245788] (log10)                   , numConfs:    5, delta: 0.869   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [23.669321,23.950142] (log10)                   , numConfs:    6, delta: 0.476
+Refining sequence A54=VAL
+sequence    8/  19   A54=VAL   K*(log10): 6.038027  in [6.007664 , 6.038028] (log10)   protein: [8.727458 , 8.757821] (log10)                   , numConfs:    5, delta: 0.068   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [20.307656,20.307656] (log10)                   , numConfs:    5, delta: 0.000
+Refining sequence A54=LEU
+sequence    9/  19   A54=LEU   K*(log10): 5.384918  in [5.183667 , 5.918833] (log10)   protein: [11.626378,11.827629] (log10)                   , numConfs:    5, delta: 0.371   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [22.553467,23.087381] (log10)                   , numConfs:    5, delta: 0.708
+Refining sequence A54=SER
+sequence   10/  19   A54=SER   K*(log10): 5.483157  in [4.182766 , 5.877162] (log10)   protein: [11.367098,12.667489] (log10)                   , numConfs:    6, delta: 0.950   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [22.392426,22.786430] (log10)                   , numConfs:    6, delta: 0.596
+Refining sequence A54=CYS
+sequence   11/  19   A54=CYS   K*(log10): 5.675984  in [5.616605 , 5.757000] (log10)   protein: [11.094546,11.153925] (log10)                   , numConfs:    6, delta: 0.128   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [22.312701,22.393717] (log10)                   , numConfs:    6, delta: 0.170
+Refining sequence A54=PHE
+sequence   12/  19   A54=PHE   K*(log10): 5.609181  in [5.496027 , 5.708387] (log10)   protein: [12.400980,12.514134] (log10)                   , numConfs:    5, delta: 0.229   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [23.552332,23.651537] (log10)                   , numConfs:    5, delta: 0.204
+Refining sequence A54=HIS
+sequence   13/  19   A54=HIS   K*(log10): 4.715526  in [4.422081 , 5.527730] (log10)   protein: [15.511034,15.804479] (log10)                   , numConfs:    5, delta: 0.491   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [25.768730,26.580934] (log10)                   , numConfs:    5, delta: 0.846
+Refining sequence A54=ALA
+sequence   14/  19   A54=ALA   K*(log10): 5.428456  in [5.421187 , 5.428456] (log10)   protein: [10.572974,10.580243] (log10)                   , numConfs:    5, delta: 0.017   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [21.543600,21.543601] (log10)                   , numConfs:    5, delta: 0.000
+Refining sequence A54=TRP
+sequence   15/  19   A54=TRP   K*(log10): 5.131683  in [4.859038 , 5.142011] (log10)   protein: [12.364335,12.636980] (log10)                   , numConfs:    5, delta: 0.466   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [23.038188,23.048517] (log10)                   , numConfs:    6, delta: 0.024
+Refining sequence A54=GLY
+sequence   16/  19   A54=GLY   K*(log10): 5.107021  in [5.100559 , 5.107022] (log10)   protein: [9.948960 , 9.955422] (log10)                   , numConfs:    5, delta: 0.015   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [20.598152,20.598153] (log10)                   , numConfs:    5, delta: 0.000
+Refining sequence A54=LYS
+sequence   17/  19   A54=LYS   K*(log10): 4.218392  in [3.874043 , 4.617891] (log10)   protein: [15.188404,15.532753] (log10)                   , numConfs:    5, delta: 0.547   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [24.948966,25.348465] (log10)                   , numConfs:    5, delta: 0.601
+Refining sequence A54=ARG
+sequence   18/  19   A54=ARG   K*(log10): 3.920580  in [3.545774 , 4.389012] (log10)   protein: [15.419357,15.794162] (log10)                   , numConfs:    5, delta: 0.578   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [24.882107,25.350540] (log10)                   , numConfs:    5, delta: 0.660
+Refining sequence A54=ILE
+sequence   19/  19   A54=ILE   K*(log10): 3.514088  in [3.394610 , 3.514755] (log10)   protein: [9.992230 ,10.111708] (log10)                   , numConfs:    5, delta: 0.241   ligand: [5.542171 , 5.542171] (log10)                   , numConfs:    4, delta: 0.000   complex: [19.048488,19.049155] (log10)                   , numConfs:    6, delta: 0.002
+result:
+	sequence: A54=glu
+	K* score: 6.914359  in [6.369248 , 7.480622] (log10)
+Residues           A51   A54   C409 complex Sequence   glu  
+Ensemble of 6 conformations:
+	1/6     Energy: -27.912917       Score: -28.227417       Rotamers: W0 W0 W0     Residue Conf IDs: 13    186   3    
+	2/6     Energy: -27.209686       Score: -27.504443       Rotamers: W0 L4 W0     Residue Conf IDs: 13    4     3    
+	3/6     Energy: -27.086252       Score: -27.432034       Rotamers: W0 L7 W0     Residue Conf IDs: 13    7     3    
+	4/6     Energy: -26.734372       Score: -27.208576       Rotamers: L7 W0 W0     Residue Conf IDs: 7     186   3    
+	5/6     Energy: -26.089250       Score: -26.478111       Rotamers: L7 L4 W0     Residue Conf IDs: 7     4     3    
+	6/6     Energy: -25.969677       Score: -26.405097       Rotamers: L7 L7 W0     Residue Conf IDs: 7     7     3    
+
+result:
+	sequence: A54=THR
+	K* score: 5.959663  in [5.128940 , 6.768448] (log10)
+Residues           A51   A54   C409 complex Sequence   THR  
+Ensemble of 5 conformations:
+	1/5     Energy: -28.826422       Score: -30.971809       Rotamers: W0 L0 W0     Residue Conf IDs: 13    168   3    
+	2/5     Energy: -28.604855       Score: -29.810351       Rotamers: W0 L3 W0     Residue Conf IDs: 13    171   3    
+	3/5     Energy: -28.287659       Score: -30.444271       Rotamers: W0 L5 W0     Residue Conf IDs: 13    173   3    
+	4/5     Energy: -27.779571       Score: -29.648952       Rotamers: W0 L2 W0     Residue Conf IDs: 13    170   3    
+	5/5     Energy: -27.705045       Score: -29.942415       Rotamers: L7 L0 W0     Residue Conf IDs: 7     168   3    
+
+result:
+	sequence: A54=ASP
+	K* score: 6.600389  in [6.562404 , 6.601444] (log10)
+Residues           A51   A54   C409 complex Sequence   ASP  
+Ensemble of 5 conformations:
+	1/5     Energy: -27.835323       Score: -28.126559       Rotamers: W0 L3 W0     Residue Conf IDs: 13    59    3    
+	2/5     Energy: -26.717467       Score: -27.098567       Rotamers: L7 L3 W0     Residue Conf IDs: 7     59    3    
+	3/5     Energy: -25.457461       Score: -25.785797       Rotamers: W0 L3 L1     Residue Conf IDs: 13    59    1    
+	4/5     Energy: -24.684764       Score: -25.067760       Rotamers: W0 L4 W0     Residue Conf IDs: 13    60    3    
+	5/5     Energy: -24.261505       Score: -24.954316       Rotamers: L7 L3 L1     Residue Conf IDs: 7     59    1    
+
+result:
+	sequence: A54=GLN
+	K* score: 5.806308  in [5.701099 , 6.447090] (log10)
+Residues           A51   A54   C409 complex Sequence   GLN  
+Ensemble of 5 conformations:
+	1/5     Energy: -31.237135       Score: -31.649118       Rotamers: W0 L7 W0     Residue Conf IDs: 13    112   3    
+	2/5     Energy: -30.710942       Score: -31.107152       Rotamers: W0 L8 W0     Residue Conf IDs: 13    113   3    
+	3/5     Energy: -30.119390       Score: -30.618191       Rotamers: L7 L7 W0     Residue Conf IDs: 7     112   3    
+	4/5     Energy: -29.593101       Score: -30.076751       Rotamers: L7 L8 W0     Residue Conf IDs: 7     113   3    
+	5/5     Energy: -29.240301       Score: -29.477055       Rotamers: W0 L3 W0     Residue Conf IDs: 13    108   3    
+
+result:
+	sequence: A54=ASN
+	K* score: 5.566509  in [5.127311 , 6.397974] (log10)
+Residues           A51   A54   C409 complex Sequence   ASN  
+Ensemble of 5 conformations:
+	1/5     Energy: -30.059785       Score: -30.448794       Rotamers: W0 L5 W0     Residue Conf IDs: 13    100   3    
+	2/5     Energy: -29.640985       Score: -29.986636       Rotamers: W0 L6 W0     Residue Conf IDs: 13    101   3    
+	3/5     Energy: -29.406876       Score: -29.737243       Rotamers: W0 L3 W0     Residue Conf IDs: 13    98    3    
+	4/5     Energy: -29.236862       Score: -30.069809       Rotamers: W0 L4 W0     Residue Conf IDs: 13    99    3    
+	5/5     Energy: -28.966047       Score: -29.533268       Rotamers: L7 L5 W0     Residue Conf IDs: 7     100   3    
+
+result:
+	sequence: A54=TYR
+	K* score: 5.623295  in [5.191978 , 6.188999] (log10)
+Residues           A51   A54   C409 complex Sequence   TYR  
+Ensemble of 6 conformations:
+	1/6     Energy: -31.123395       Score: -31.456502       Rotamers: W0 L2 W0     Residue Conf IDs: 13    50    3    
+	2/6     Energy: -30.331520       Score: -30.665088       Rotamers: W0 L3 W0     Residue Conf IDs: 13    51    3    
+	3/6     Energy: -30.001943       Score: -30.431468       Rotamers: L7 L2 W0     Residue Conf IDs: 7     50    3    
+	4/6     Energy: -29.209844       Score: -29.639962       Rotamers: L7 L3 W0     Residue Conf IDs: 7     51    3    
+	5/6     Energy: -28.783684       Score: -29.152823       Rotamers: W0 L2 L1     Residue Conf IDs: 13    50    1    
+	6/6     Energy: -26.383107       Score: -28.624802       Rotamers: W0 L6 L1     Residue Conf IDs: 13    54    1    
+
+result:
+	sequence: A54=MET
+	K* score: 5.765012  in [4.881362 , 6.045833] (log10)
+Residues           A51   A54   C409 complex Sequence   MET  
+Ensemble of 6 conformations:
+	1/6     Energy: -31.768198       Score: -33.162157       Rotamers: W0 L8 W0     Residue Conf IDs: 13    32    3    
+	2/6     Energy: -31.457725       Score: -31.847826       Rotamers: W0 L10 W0     Residue Conf IDs: 13    34    3    
+	3/6     Energy: -31.146518       Score: -31.645705       Rotamers: W0 L6 W0     Residue Conf IDs: 13    30    3    
+	4/6     Energy: -31.110520       Score: -31.561870       Rotamers: W0 L11 W0     Residue Conf IDs: 13    35    3    
+	5/6     Energy: -30.818439       Score: -31.843184       Rotamers: W0 L7 W0     Residue Conf IDs: 13    31    3    
+	6/6     Energy: -30.174340       Score: -32.142640       Rotamers: L7 L8 W0     Residue Conf IDs: 7     32    3    
+
+result:
+	sequence: A54=VAL
+	K* score: 6.038027  in [6.007664 , 6.038028] (log10)
+Residues           A51   A54   C409 complex Sequence   VAL  
+Ensemble of 5 conformations:
+	1/5     Energy: -27.636362       Score: -27.914579       Rotamers: W0 L1 W0     Residue Conf IDs: 13    10    3    
+	2/5     Energy: -26.516595       Score: -26.883727       Rotamers: L7 L1 W0     Residue Conf IDs: 7     10    3    
+	3/5     Energy: -25.293411       Score: -25.643454       Rotamers: W0 L1 L1     Residue Conf IDs: 13    10    1    
+	4/5     Energy: -24.091280       Score: -24.809113       Rotamers: L7 L1 L1     Residue Conf IDs: 7     10    1    
+	5/5     Energy: -21.896007       Score: -22.320056       Rotamers: L6 L1 W0     Residue Conf IDs: 6     10    3    
+
+result:
+	sequence: A54=LEU
+	K* score: 5.384918  in [5.183667 , 5.918833] (log10)
+Residues           A51   A54   C409 complex Sequence   LEU  
+Ensemble of 5 conformations:
+	1/5     Energy: -30.448097       Score: -30.835115       Rotamers: W0 L2 W0     Residue Conf IDs: 13    21    3    
+	2/5     Energy: -30.118282       Score: -30.811258       Rotamers: W0 L3 W0     Residue Conf IDs: 13    22    3    
+	3/5     Energy: -29.345088       Score: -29.810708       Rotamers: L7 L2 W0     Residue Conf IDs: 7     21    3    
+	4/5     Energy: -28.722092       Score: -29.798626       Rotamers: L7 L3 W0     Residue Conf IDs: 7     22    3    
+	5/5     Energy: -28.127532       Score: -28.973340       Rotamers: W0 L1 W0     Residue Conf IDs: 13    20    3    
+
+result:
+	sequence: A54=SER
+	K* score: 5.483157  in [4.182766 , 5.877162] (log10)
+Residues           A51   A54   C409 complex Sequence   SER  
+Ensemble of 6 conformations:
+	1/6     Energy: -29.799887       Score: -30.024893       Rotamers: W0 L13 W0     Residue Conf IDs: 13    163   3    
+	2/6     Energy: -29.565717       Score: -29.770218       Rotamers: W0 L15 W0     Residue Conf IDs: 13    165   3    
+	3/6     Energy: -29.544007       Score: -29.736682       Rotamers: W0 L16 W0     Residue Conf IDs: 13    166   3    
+	4/6     Energy: -29.445126       Score: -29.629927       Rotamers: W0 L9 W0     Residue Conf IDs: 13    159   3    
+	5/6     Energy: -29.287358       Score: -29.486294       Rotamers: W0 L6 W0     Residue Conf IDs: 13    156   3    
+	6/6     Energy: -29.283882       Score: -30.047267       Rotamers: W0 L0 W0     Residue Conf IDs: 13    150   3    
+
+result:
+	sequence: A54=CYS
+	K* score: 5.675984  in [5.616605 , 5.757000] (log10)
+Residues           A51   A54   C409 complex Sequence   CYS  
+Ensemble of 6 conformations:
+	1/6     Energy: -30.144093       Score: -30.394625       Rotamers: W0 L2 W0     Residue Conf IDs: 13    104   3    
+	2/6     Energy: -29.704458       Score: -29.920598       Rotamers: W0 L1 W0     Residue Conf IDs: 13    103   3    
+	3/6     Energy: -29.021882       Score: -29.359730       Rotamers: L7 L2 W0     Residue Conf IDs: 7     104   3    
+	4/6     Energy: -28.588022       Score: -28.893598       Rotamers: L7 L1 W0     Residue Conf IDs: 7     103   3    
+	5/6     Energy: -27.826214       Score: -28.162196       Rotamers: W0 L2 L1     Residue Conf IDs: 13    104   1    
+	6/6     Energy: -27.409758       Score: -27.670348       Rotamers: W0 L1 L1     Residue Conf IDs: 13    103   1    
+
+result:
+	sequence: A54=PHE
+	K* score: 5.609181  in [5.496027 , 5.708387] (log10)
+Residues           A51   A54   C409 complex Sequence   PHE  
+Ensemble of 5 conformations:
+	1/5     Energy: -32.022893       Score: -32.200412       Rotamers: W0 L1 W0     Residue Conf IDs: 13    38    3    
+	2/5     Energy: -30.907749       Score: -31.175570       Rotamers: L7 L1 W0     Residue Conf IDs: 7     38    3    
+	3/5     Energy: -30.381560       Score: -31.636910       Rotamers: W0 L2 W0     Residue Conf IDs: 13    39    3    
+	4/5     Energy: -29.895698       Score: -30.741849       Rotamers: L7 L2 W0     Residue Conf IDs: 7     39    3    
+	5/5     Energy: -29.731878       Score: -29.947786       Rotamers: W0 L1 L1     Residue Conf IDs: 13    38    1    
+
+result:
+	sequence: A54=HIS
+	K* score: 4.715526  in [4.422081 , 5.527730] (log10)
+Residues           A51   A54   C409 complex Sequence   HIS  
+Ensemble of 5 conformations:
+	1/5     Energy: -34.843753       Score: -35.541124       Rotamers: W0 L5 W0     Residue Conf IDs: 13    120   3    
+	2/5     Energy: -34.273586       Score: -36.074112       Rotamers: W0 L6 W0     Residue Conf IDs: 13    121   3    
+	3/5     Energy: -33.913934       Score: -34.699641       Rotamers: W0 L7 W0     Residue Conf IDs: 13    122   3    
+	4/5     Energy: -33.786028       Score: -34.578550       Rotamers: L7 L5 W0     Residue Conf IDs: 7     120   3    
+	5/5     Energy: -32.751138       Score: -35.026952       Rotamers: L7 L6 W0     Residue Conf IDs: 7     121   3    
+
+result:
+	sequence: A54=ALA
+	K* score: 5.428456  in [5.421187 , 5.428456] (log10)
+Residues           A51   A54   C409 complex Sequence   ALA  
+Ensemble of 5 conformations:
+	1/5     Energy: -29.322632       Score: -29.497185       Rotamers: W0 L W0     Residue Conf IDs: 13    8     3    
+	2/5     Energy: -28.205255       Score: -28.468848       Rotamers: L7 L W0     Residue Conf IDs: 7     8     3    
+	3/5     Energy: -27.038927       Score: -27.258567       Rotamers: W0 L L1     Residue Conf IDs: 13    8     1    
+	4/5     Energy: -25.840221       Score: -26.426740       Rotamers: L7 L L1     Residue Conf IDs: 7     8     1    
+	5/5     Energy: -23.581355       Score: -23.900847       Rotamers: L6 L W0     Residue Conf IDs: 6     8     3    
+
+result:
+	sequence: A54=TRP
+	K* score: 5.131683  in [4.859038 , 5.142011] (log10)
+Residues           A51   A54   C409 complex Sequence   TRP  
+Ensemble of 6 conformations:
+	1/6     Energy: -31.133672       Score: -31.833173       Rotamers: W0 L6 W0     Residue Conf IDs: 13    47    3    
+	2/6     Energy: -30.650526       Score: -30.937235       Rotamers: W0 L2 W0     Residue Conf IDs: 13    43    3    
+	3/6     Energy: -30.177808       Score: -30.887203       Rotamers: L7 L6 W0     Residue Conf IDs: 7     47    3    
+	4/6     Energy: -29.532636       Score: -29.912406       Rotamers: L7 L2 W0     Residue Conf IDs: 7     43    3    
+	5/6     Energy: -28.813246       Score: -29.504192       Rotamers: W0 L6 L1     Residue Conf IDs: 13    47    1    
+	6/6     Energy: -27.775032       Score: -28.754732       Rotamers: L7 L6 L1     Residue Conf IDs: 7     47    1    
+
+result:
+	sequence: A54=GLY
+	K* score: 5.107021  in [5.100559 , 5.107022] (log10)
+Residues           A51   A54   C409 complex Sequence   GLY  
+Ensemble of 5 conformations:
+	1/5     Energy: -28.030568       Score: -28.194169       Rotamers: W0 L W0     Residue Conf IDs: 13    114   3    
+	2/5     Energy: -26.914757       Score: -27.166730       Rotamers: L7 L W0     Residue Conf IDs: 7     114   3    
+	3/5     Energy: -25.784770       Score: -25.991503       Rotamers: W0 L L1     Residue Conf IDs: 13    114   1    
+	4/5     Energy: -24.588494       Score: -25.160574       Rotamers: L7 L L1     Residue Conf IDs: 7     114   1    
+	5/5     Energy: -22.278061       Score: -22.587227       Rotamers: L6 L W0     Residue Conf IDs: 6     114   3    
+
+result:
+	sequence: A54=LYS
+	K* score: 4.218392  in [3.874043 , 4.617891] (log10)
+Residues           A51   A54   C409 complex Sequence   LYS  
+Ensemble of 5 conformations:
+	1/5     Energy: -33.853613       Score: -34.640526       Rotamers: W0 L15 W0     Residue Conf IDs: 13    138   3    
+	2/5     Energy: -32.873915       Score: -33.345348       Rotamers: W0 L25 W0     Residue Conf IDs: 13    148   3    
+	3/5     Energy: -32.734190       Score: -33.635277       Rotamers: L7 L15 W0     Residue Conf IDs: 7     138   3    
+	4/5     Energy: -32.078005       Score: -33.364004       Rotamers: W0 L20 W0     Residue Conf IDs: 13    143   3    
+	5/5     Energy: -32.011338       Score: -34.349458       Rotamers: W0 L18 W0     Residue Conf IDs: 13    141   3    
+
+result:
+	sequence: A54=ARG
+	K* score: 3.920580  in [3.545774 , 4.389012] (log10)
+Residues           A51   A54   C409 complex Sequence   ARG  
+Ensemble of 5 conformations:
+	1/5     Energy: -33.452923       Score: -33.869371       Rotamers: W0 L31 W0     Residue Conf IDs: 13    92    3    
+	2/5     Energy: -33.075298       Score: -34.417147       Rotamers: W0 L24 W0     Residue Conf IDs: 13    85    3    
+	3/5     Energy: -33.011903       Score: -33.438611       Rotamers: W0 L30 W0     Residue Conf IDs: 13    91    3    
+	4/5     Energy: -32.777953       Score: -33.768817       Rotamers: W0 L25 W0     Residue Conf IDs: 13    86    3    
+	5/5     Energy: -32.075274       Score: -33.488719       Rotamers: W0 L21 W0     Residue Conf IDs: 13    82    3    
+
+result:
+	sequence: A54=ILE
+	K* score: 3.514088  in [3.394610 , 3.514755] (log10)
+Residues           A51   A54   C409 complex Sequence   ILE  
+Ensemble of 6 conformations:
+	1/6     Energy: -25.927121       Score: -26.856505       Rotamers: W0 L5 L1     Residue Conf IDs: 13    17    1    
+	2/6     Energy: -24.588531       Score: -26.074975       Rotamers: L7 L5 L1     Residue Conf IDs: 7     17    1    
+	3/6     Energy: -23.751934       Score: -24.174258       Rotamers: W0 L6 W0     Residue Conf IDs: 13    18    3    
+	4/6     Energy: -23.540569       Score: -24.483526       Rotamers: W0 L5 W0     Residue Conf IDs: 13    17    3    
+	5/6     Energy: -22.632786       Score: -23.150811       Rotamers: L7 L6 W0     Residue Conf IDs: 7     18    3    
+	6/6     Energy: -21.953127       Score: -23.505485       Rotamers: L7 L5 W0     Residue Conf IDs: 7     17    3    
+

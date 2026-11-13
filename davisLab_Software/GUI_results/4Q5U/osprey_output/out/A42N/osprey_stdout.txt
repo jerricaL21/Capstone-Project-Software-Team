@@ -1,0 +1,483 @@
+OSPREY 3.2.304, Python 3.11.16, Java 17.0.12, Windows-10-10.0.26200-SP0
+Using up to 100000 MiB heap memory: 8192 MiB for garbage, 91808 MiB for storage
+read PDB file from file: D:/Jerrica's Branch of Capstone-Project-Software-Team/Capstone-Project-Software-Team/davisLab_Software/GUI_results/4Q5U/pdb_files/4Q5U_sidechain_fixed_rotamers_fixed.pdb
+WARNING: 2 Strand residue(s) could not be matched to templates and were automatically deleted:
+GLN A   3
+HIE A 107
+Calculating reference energies for 209 residue confs...
+Progress:  100.0%   ETA: 26.0 ms
+Finished in 1.0 s
+Calculating energy matrix with 4470 entries
+Progress:   45.8%   ETA: 5.7 s
+Progress:   97.1%   ETA: 375.0 ms
+Progress:  100.0%   ETA: 0 ns
+Finished in 10.8 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A42N\emat.protein.dat
+Calculating energy matrix with 4470 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 2.1 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A42N\emat.protein.rigid.dat
+Calculating reference energies for 40 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 43.9 ms
+Calculating energy matrix with 215 entries
+Progress:  100.0%   ETA: 18.0 ms
+Finished in 662.7 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A42N\emat.ligand.dat
+Calculating energy matrix with 215 entries
+Progress:  100.0%   ETA: 0 ns
+Finished in 23.1 ms
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A42N\emat.ligand.rigid.dat
+Calculating reference energies for 249 residue confs...
+Progress:  100.0%   ETA: 0 ns
+Finished in 204.7 ms
+Calculating energy matrix with 13045 entries
+Progress:   41.1%   ETA: 7.5 s
+Progress:   73.7%   ETA: 3.0 s
+Progress:   87.0%   ETA: 119.0 ms
+Progress:   97.7%   ETA: 0 ns
+Progress:  100.0%   ETA: 0 ns
+Finished in 21.5 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A42N\emat.complex.dat
+Calculating energy matrix with 13045 entries
+Progress:   89.6%   ETA: 0 ns
+Progress:  100.0%   ETA: 0 ns
+Finished in 6.5 s
+wrote energy matrix to file: D:\Jerrica's Branch of Capstone-Project-Software-Team\Capstone-Project-Software-Team\davisLab_Software\GUI_results\4Q5U\osprey_output\out\A42N\emat.complex.rigid.dat
+computing K* score for the wild-type sequence...
+sequence    0/   0   A42=asn   K*(log10): 9.632528  in [8.450655 ,11.571810] (log10)   protein: [17.081372,18.263234] (log10)                   , numConfs:    6, delta: 0.934   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.346019,35.285301] (log10)                   , numConfs:   40, delta: 0.988
+computing K* scores for the 19 best sequences to epsilon = 0.99 ...
+Refining sequence 
+Refining sequence A42=ASP
+Refining sequence A42=ASP
+Refining sequence A42=GLU
+Refining sequence A42=ASP
+Refining sequence A42=ASP
+Refining sequence A42=GLU
+Refining sequence A42=ASP
+Refining sequence A42=ASP
+Refining sequence A42=GLU
+Refining sequence A42=SER
+Refining sequence A42=ASP
+sequence    1/  19   A42=ASP   K*(log10): 10.750315 in [10.446538,12.735153] (log10)   protein: [14.634903,14.938669] (log10)                   , numConfs:    5, delta: 0.503   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [32.017337,34.002174] (log10)                   , numConfs:   56, delta: 0.990
+Refining sequence A42=THR
+Refining sequence A42=GLN
+Refining sequence A42=SER
+Refining sequence A42=MET
+Refining sequence A42=SER
+Refining sequence A42=THR
+Refining sequence A42=GLU
+sequence    2/  19   A42=GLU   K*(log10): 10.591159 in [10.072668,12.500595] (log10)   protein: [15.301544,15.820024] (log10)                   , numConfs:    5, delta: 0.697   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [32.524822,34.434258] (log10)                   , numConfs:   32, delta: 0.988
+Refining sequence A42=SER
+Refining sequence A42=SER
+Refining sequence A42=GLN
+Refining sequence A42=SER
+Refining sequence A42=THR
+Refining sequence A42=MET
+Refining sequence A42=SER
+Refining sequence A42=TRP
+Refining sequence A42=SER
+Refining sequence A42=THR
+Refining sequence A42=SER
+Refining sequence A42=MET
+Refining sequence A42=GLN
+Refining sequence A42=SER
+Refining sequence A42=THR
+Refining sequence A42=CYS
+Refining sequence A42=SER
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=LEU
+Refining sequence A42=TYR
+Refining sequence A42=MET
+Refining sequence A42=SER
+Refining sequence A42=TRP
+Refining sequence A42=THR
+Refining sequence A42=SER
+Refining sequence A42=GLN
+Refining sequence A42=SER
+Refining sequence A42=PHE
+Refining sequence A42=ARG
+Refining sequence A42=SER
+Refining sequence A42=LYS
+Refining sequence A42=THR
+Refining sequence A42=MET
+Refining sequence A42=SER
+Refining sequence A42=SER
+sequence    3/  19   A42=SER   K*(log10): 9.903517  in [8.803223 ,11.902795] (log10)   protein: [16.581448,17.681730] (log10)                   , numConfs:    6, delta: 0.921   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.117083,35.116361] (log10)                   , numConfs:  136, delta: 0.990
+Refining sequence A42=ARG
+Refining sequence A42=ILE
+Refining sequence A42=THR
+sequence    4/  19   A42=THR   K*(log10): 9.938179  in [9.312007 ,11.871639] (log10)   protein: [17.018836,17.644997] (log10)                   , numConfs:    5, delta: 0.763   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.589133,35.522594] (log10)                   , numConfs:   63, delta: 0.988
+Refining sequence A42=MET
+Refining sequence A42=GLN
+Refining sequence A42=TRP
+Refining sequence A42=CYS
+Refining sequence A42=LYS
+Refining sequence A42=ARG
+Refining sequence A42=VAL
+Refining sequence A42=TYR
+Refining sequence A42=MET
+sequence    5/  19   A42=MET   K*(log10): 9.822261  in [9.196557 ,11.771923] (log10)   protein: [17.613072,18.238765] (log10)                   , numConfs:    6, delta: 0.763   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [34.067452,36.017113] (log10)                   , numConfs:   56, delta: 0.989
+Refining sequence A42=LYS
+Refining sequence A42=ARG
+Refining sequence A42=GLN
+sequence    6/  19   A42=GLN   K*(log10): 9.748054  in [9.089674 ,11.715092] (log10)   protein: [17.370309,18.028678] (log10)                   , numConfs:    5, delta: 0.780   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.750482,35.717520] (log10)                   , numConfs:   48, delta: 0.989
+Refining sequence A42=TRP
+sequence    7/  19   A42=TRP   K*(log10): 9.704622  in [9.358883 ,11.698847] (log10)   protein: [18.860633,19.206360] (log10)                   , numConfs:    5, delta: 0.549   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [35.197373,37.191598] (log10)                   , numConfs:   32, delta: 0.990
+Refining sequence A42=LYS
+Refining sequence A42=PHE
+Refining sequence A42=ARG
+Refining sequence A42=CYS
+sequence    8/  19   A42=CYS   K*(log10): 9.663736  in [9.373958 ,11.642887] (log10)   protein: [16.719017,17.008783] (log10)                   , numConfs:    5, delta: 0.487   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.014872,34.994023] (log10)                   , numConfs:   24, delta: 0.990
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=LEU
+Refining sequence A42=asn
+sequence    9/  19   A42=asn   K*(log10): 9.632528  in [8.450655 ,11.571810] (log10)   protein: [17.081372,18.263234] (log10)                   , numConfs:    6, delta: 0.934   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.346019,35.285301] (log10)                   , numConfs:   40, delta: 0.988
+Refining sequence A42=TYR
+sequence   10/  19   A42=TYR   K*(log10): 9.681152  in [9.349024 ,11.545762] (log10)   protein: [18.595599,18.927714] (log10)                   , numConfs:    5, delta: 0.535   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [34.908869,36.773480] (log10)                   , numConfs:   24, delta: 0.986
+Refining sequence A42=ARG
+Refining sequence A42=ALA
+Refining sequence A42=LYS
+Refining sequence A42=GLY
+Refining sequence A42=HIS
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=PHE
+sequence   11/  19   A42=PHE   K*(log10): 9.613341  in [9.342357 ,11.443198] (log10)   protein: [17.984829,18.255803] (log10)                   , numConfs:    5, delta: 0.464   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [34.230289,36.060146] (log10)                   , numConfs:   24, delta: 0.985
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=ILE
+sequence   12/  19   A42=ILE   K*(log10): 9.765476  in [9.644770 ,11.400107] (log10)   protein: [17.358125,17.478820] (log10)                   , numConfs:    6, delta: 0.243   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.755719,35.390351] (log10)                   , numConfs:   16, delta: 0.977
+Refining sequence A42=ARG
+Refining sequence A42=VAL
+sequence   13/  19   A42=VAL   K*(log10): 9.663583  in [9.521298 ,11.355085] (log10)   protein: [17.111881,17.254155] (log10)                   , numConfs:    5, delta: 0.279   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [33.407583,35.099085] (log10)                   , numConfs:   15, delta: 0.980
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=LEU
+sequence   14/  19   A42=LEU   K*(log10): 9.574872  in [9.241600 ,11.327786] (log10)   protein: [16.390154,16.723414] (log10)                   , numConfs:    5, delta: 0.536   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [32.597144,34.350058] (log10)                   , numConfs:   21, delta: 0.982
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=HIS
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=ARG
+Refining sequence A42=LYS
+Refining sequence A42=ALA
+sequence   15/  19   A42=ALA   K*(log10): 9.534863  in [8.663831 ,11.170323] (log10)   protein: [16.282314,17.153334] (log10)                   , numConfs:    5, delta: 0.865   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [32.449295,34.084756] (log10)                   , numConfs:   13, delta: 0.977
+Refining sequence A42=ARG
+sequence   16/  19   A42=ARG   K*(log10): 9.177737  in [8.296525 ,11.162050] (log10)   protein: [18.763308,19.644509] (log10)                   , numConfs:    6, delta: 0.869   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [34.573164,36.557477] (log10)                   , numConfs:  128, delta: 0.990
+Refining sequence A42=LYS
+sequence   17/  19   A42=LYS   K*(log10): 9.168425  in [8.027299 ,11.134504] (log10)   protein: [18.444214,19.585328] (log10)                   , numConfs:    5, delta: 0.928   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [34.244757,36.210836] (log10)                   , numConfs:  112, delta: 0.989
+Refining sequence A42=GLY
+sequence   18/  19   A42=GLY   K*(log10): 9.499004  in [8.627062 ,11.129685] (log10)   protein: [15.969600,16.841530] (log10)                   , numConfs:    5, delta: 0.866   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [32.100722,33.731404] (log10)                   , numConfs:   13, delta: 0.977
+Refining sequence A42=HIS
+Refining sequence A42=HIS
+Refining sequence A42=HIS
+Refining sequence A42=HIS
+sequence   19/  19   A42=HIS   K*(log10): 8.755709  in [8.154584 ,10.743251] (log10)   protein: [19.338330,19.939443] (log10)                   , numConfs:    5, delta: 0.749   ligand: [6.632119 , 6.632130] (log10)                   , numConfs:    5, delta: 0.000   complex: [34.726157,36.713699] (log10)                   , numConfs:   48, delta: 0.990
+result:
+	sequence: A42=ASP
+	K* score: 10.750315 in [10.446538,12.735153] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   ASP  
+Ensemble of 10 conformations:
+	 1/10     Energy: -42.840563       Score: -47.433356       Rotamers: L7 L3 W0 W0 W0 W0     Residue Conf IDs: 7     66    2     8     4     34   
+	 2/10     Energy: -42.776863       Score: -47.400362       Rotamers: L7 L3 L0 W0 W0 W0     Residue Conf IDs: 7     66    0     8     4     34   
+	 3/10     Energy: -42.281645       Score: -46.632379       Rotamers: W0 L3 W0 W0 W0 W0     Residue Conf IDs: 9     66    2     8     4     34   
+	 4/10     Energy: -42.235060       Score: -46.604767       Rotamers: W0 L3 L0 W0 W0 W0     Residue Conf IDs: 9     66    0     8     4     34   
+	 5/10     Energy: -42.131002       Score: -46.775636       Rotamers: L7 L3 L1 W0 W0 W0     Residue Conf IDs: 7     66    1     8     4     34   
+	 6/10     Energy: -41.589356       Score: -45.961323       Rotamers: L8 L3 W0 W0 W0 W0     Residue Conf IDs: 8     66    2     8     4     34   
+	 7/10     Energy: -41.588634       Score: -45.969992       Rotamers: W0 L3 L1 W0 W0 W0     Residue Conf IDs: 9     66    1     8     4     34   
+	 8/10     Energy: -41.539646       Score: -45.978247       Rotamers: L7 L2 W0 W0 W0 W0     Residue Conf IDs: 7     65    2     8     4     34   
+	 9/10     Energy: -41.538679       Score: -45.932832       Rotamers: L8 L3 L0 W0 W0 W0     Residue Conf IDs: 8     66    0     8     4     34   
+	10/10     Energy: -41.480057       Score: -45.951200       Rotamers: L7 L2 L0 W0 W0 W0     Residue Conf IDs: 7     65    0     8     4     34   
+
+result:
+	sequence: A42=GLU
+	K* score: 10.591159 in [10.072668,12.500595] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   GLU  
+Ensemble of 10 conformations:
+	 1/10     Energy: -43.316465       Score: -48.210851       Rotamers: L7 L7 W0 W0 W0 W0     Residue Conf IDs: 7     54    2     8     4     34   
+	 2/10     Energy: -43.247407       Score: -48.175590       Rotamers: L7 L7 L0 W0 W0 W0     Residue Conf IDs: 7     54    0     8     4     34   
+	 3/10     Energy: -43.199523       Score: -47.393529       Rotamers: L7 L6 W0 W0 W0 W0     Residue Conf IDs: 7     53    2     8     4     34   
+	 4/10     Energy: -43.130507       Score: -47.357390       Rotamers: L7 L6 L0 W0 W0 W0     Residue Conf IDs: 7     53    0     8     4     34   
+	 5/10     Energy: -42.696320       Score: -47.277178       Rotamers: W0 L7 W0 W0 W0 W0     Residue Conf IDs: 9     54    2     8     4     34   
+	 6/10     Energy: -42.645414       Score: -47.247300       Rotamers: W0 L7 L0 W0 W0 W0     Residue Conf IDs: 9     54    0     8     4     34   
+	 7/10     Energy: -42.607184       Score: -47.552950       Rotamers: L7 L7 L1 W0 W0 W0     Residue Conf IDs: 7     54    1     8     4     34   
+	 8/10     Energy: -42.585062       Score: -46.464260       Rotamers: W0 L6 W0 W0 W0 W0     Residue Conf IDs: 9     53    2     8     4     34   
+	 9/10     Energy: -42.529297       Score: -46.433504       Rotamers: W0 L6 L0 W0 W0 W0     Residue Conf IDs: 9     53    0     8     4     34   
+	10/10     Energy: -42.495301       Score: -46.739258       Rotamers: L7 L6 L1 W0 W0 W0     Residue Conf IDs: 7     53    1     8     4     34   
+
+result:
+	sequence: A42=SER
+	K* score: 9.903517  in [8.803223 ,11.902795] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   SER  
+Ensemble of 10 conformations:
+	 1/10     Energy: -43.608437       Score: -47.934711       Rotamers: L7 L15 W0 W0 W0 W0     Residue Conf IDs: 7     165   2     8     4     34   
+	 2/10     Energy: -43.532293       Score: -47.901016       Rotamers: L7 L15 L0 W0 W0 W0     Residue Conf IDs: 7     165   0     8     4     34   
+	 3/10     Energy: -43.468153       Score: -47.662962       Rotamers: L7 L13 W0 W0 W0 W0     Residue Conf IDs: 7     163   2     8     4     34   
+	 4/10     Energy: -43.395198       Score: -47.629691       Rotamers: L7 L13 L0 W0 W0 W0     Residue Conf IDs: 7     163   0     8     4     34   
+	 5/10     Energy: -43.219627       Score: -47.218133       Rotamers: L7 L12 W0 W0 W0 W0     Residue Conf IDs: 7     162   2     8     4     34   
+	 6/10     Energy: -43.199113       Score: -47.263071       Rotamers: L7 L16 W0 W0 W0 W0     Residue Conf IDs: 7     166   2     8     4     34   
+	 7/10     Energy: -43.143308       Score: -47.184224       Rotamers: L7 L12 L0 W0 W0 W0     Residue Conf IDs: 7     162   0     8     4     34   
+	 8/10     Energy: -43.125974       Score: -47.229988       Rotamers: L7 L16 L0 W0 W0 W0     Residue Conf IDs: 7     166   0     8     4     34   
+	 9/10     Energy: -43.013067       Score: -47.064724       Rotamers: L7 L14 W0 W0 W0 W0     Residue Conf IDs: 7     164   2     8     4     34   
+	10/10     Energy: -42.978331       Score: -46.886765       Rotamers: W0 L15 W0 W0 W0 W0     Residue Conf IDs: 9     165   2     8     4     34   
+
+result:
+	sequence: A42=THR
+	K* score: 9.938179  in [9.312007 ,11.871639] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   THR  
+Ensemble of 10 conformations:
+	 1/10     Energy: -44.288076       Score: -48.244987       Rotamers: L7 L5 W0 W0 W0 W0     Residue Conf IDs: 7     173   2     8     4     34   
+	 2/10     Energy: -44.223804       Score: -48.149445       Rotamers: L7 L0 W0 W0 W0 W0     Residue Conf IDs: 7     168   2     8     4     34   
+	 3/10     Energy: -44.216192       Score: -48.207643       Rotamers: L7 L5 L0 W0 W0 W0     Residue Conf IDs: 7     173   0     8     4     34   
+	 4/10     Energy: -44.173811       Score: -48.191638       Rotamers: L7 L2 W0 W0 W0 W0     Residue Conf IDs: 7     170   2     8     4     34   
+	 5/10     Energy: -44.150500       Score: -48.112852       Rotamers: L7 L0 L0 W0 W0 W0     Residue Conf IDs: 7     168   0     8     4     34   
+	 6/10     Energy: -44.102814       Score: -48.434404       Rotamers: L7 L4 W0 W0 W0 W0     Residue Conf IDs: 7     172   2     8     4     34   
+	 7/10     Energy: -44.101854       Score: -48.154346       Rotamers: L7 L2 L0 W0 W0 W0     Residue Conf IDs: 7     170   0     8     4     34   
+	 8/10     Energy: -44.029501       Score: -48.397249       Rotamers: L7 L4 L0 W0 W0 W0     Residue Conf IDs: 7     172   0     8     4     34   
+	 9/10     Energy: -43.867674       Score: -48.278621       Rotamers: L7 L1 W0 W0 W0 W0     Residue Conf IDs: 7     169   2     8     4     34   
+	10/10     Energy: -43.792893       Score: -48.244403       Rotamers: L7 L1 L0 W0 W0 W0     Residue Conf IDs: 7     169   0     8     4     34   
+
+result:
+	sequence: A42=MET
+	K* score: 9.822261  in [9.196557 ,11.771923] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   MET  
+Ensemble of 10 conformations:
+	 1/10     Energy: -45.261862       Score: -49.474679       Rotamers: L7 L11 W0 W0 W0 W0     Residue Conf IDs: 7     34    2     8     4     34   
+	 2/10     Energy: -45.187420       Score: -49.439752       Rotamers: L7 L11 L0 W0 W0 W0     Residue Conf IDs: 7     34    0     8     4     34   
+	 3/10     Energy: -44.740691       Score: -48.828702       Rotamers: L7 L9 W0 W0 W0 W0     Residue Conf IDs: 7     32    2     8     4     34   
+	 4/10     Energy: -44.689753       Score: -48.744614       Rotamers: L7 L8 W0 W0 W0 W0     Residue Conf IDs: 7     31    2     8     4     34   
+	 5/10     Energy: -44.676056       Score: -48.739150       Rotamers: L7 L7 W0 W0 W0 W0     Residue Conf IDs: 7     30    2     8     4     34   
+	 6/10     Energy: -44.661796       Score: -48.793900       Rotamers: L7 L9 L0 W0 W0 W0     Residue Conf IDs: 7     32    0     8     4     34   
+	 7/10     Energy: -44.642734       Score: -48.445292       Rotamers: W0 L11 W0 W0 W0 W0     Residue Conf IDs: 9     34    2     8     4     34   
+	 8/10     Energy: -44.613459       Score: -48.709669       Rotamers: L7 L8 L0 W0 W0 W0     Residue Conf IDs: 7     31    0     8     4     34   
+	 9/10     Energy: -44.599408       Score: -48.704088       Rotamers: L7 L7 L0 W0 W0 W0     Residue Conf IDs: 7     30    0     8     4     34   
+	10/10     Energy: -44.584221       Score: -48.415749       Rotamers: W0 L11 L0 W0 W0 W0     Residue Conf IDs: 9     34    0     8     4     34   
+
+result:
+	sequence: A42=GLN
+	K* score: 9.748054  in [9.089674 ,11.715092] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   GLN  
+Ensemble of 10 conformations:
+	 1/10     Energy: -45.097486       Score: -49.947795       Rotamers: L7 L7 W0 W0 W0 W0     Residue Conf IDs: 7     112   2     8     4     34   
+	 2/10     Energy: -45.020765       Score: -49.913405       Rotamers: L7 L7 L0 W0 W0 W0     Residue Conf IDs: 7     112   0     8     4     34   
+	 3/10     Energy: -44.649525       Score: -48.755804       Rotamers: L7 L6 W0 W0 W0 W0     Residue Conf IDs: 7     111   2     8     4     34   
+	 4/10     Energy: -44.574994       Score: -48.719902       Rotamers: L7 L6 L0 W0 W0 W0     Residue Conf IDs: 7     111   0     8     4     34   
+	 5/10     Energy: -44.493540       Score: -48.924610       Rotamers: W0 L7 W0 W0 W0 W0     Residue Conf IDs: 9     112   2     8     4     34   
+	 6/10     Energy: -44.435692       Score: -48.895603       Rotamers: W0 L7 L0 W0 W0 W0     Residue Conf IDs: 9     112   0     8     4     34   
+	 7/10     Energy: -44.379743       Score: -49.284465       Rotamers: L7 L7 L1 W0 W0 W0     Residue Conf IDs: 7     112   1     8     4     34   
+	 8/10     Energy: -44.031228       Score: -47.728719       Rotamers: W0 L6 W0 W0 W0 W0     Residue Conf IDs: 9     111   2     8     4     34   
+	 9/10     Energy: -43.972144       Score: -47.698200       Rotamers: W0 L6 L0 W0 W0 W0     Residue Conf IDs: 9     111   0     8     4     34   
+	10/10     Energy: -43.933531       Score: -48.097499       Rotamers: L7 L6 L1 W0 W0 W0     Residue Conf IDs: 7     111   1     8     4     34   
+
+result:
+	sequence: A42=TRP
+	K* score: 9.704622  in [9.358883 ,11.698847] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   TRP  
+Ensemble of 10 conformations:
+	 1/10     Energy: -47.205076       Score: -51.304965       Rotamers: L7 L6 W0 W0 W0 W0     Residue Conf IDs: 7     46    2     8     4     34   
+	 2/10     Energy: -47.126013       Score: -51.269165       Rotamers: L7 L6 L0 W0 W0 W0     Residue Conf IDs: 7     46    0     8     4     34   
+	 3/10     Energy: -46.575389       Score: -50.273462       Rotamers: W0 L6 W0 W0 W0 W0     Residue Conf IDs: 9     46    2     8     4     34   
+	 4/10     Energy: -46.517129       Score: -50.243045       Rotamers: W0 L6 L0 W0 W0 W0     Residue Conf IDs: 9     46    0     8     4     34   
+	 5/10     Energy: -46.483876       Score: -50.640071       Rotamers: L7 L6 L1 W0 W0 W0     Residue Conf IDs: 7     46    1     8     4     34   
+	 6/10     Energy: -46.267923       Score: -50.748472       Rotamers: L7 L4 W0 W0 W0 W0     Residue Conf IDs: 7     44    2     8     4     34   
+	 7/10     Energy: -46.191957       Score: -50.712932       Rotamers: L7 L4 L0 W0 W0 W0     Residue Conf IDs: 7     44    0     8     4     34   
+	 8/10     Energy: -45.883658       Score: -49.637908       Rotamers: L8 L6 W0 W0 W0 W0     Residue Conf IDs: 8     46    2     8     4     34   
+	 9/10     Energy: -45.881748       Score: -49.603903       Rotamers: W0 L6 L1 W0 W0 W0     Residue Conf IDs: 9     46    1     8     4     34   
+	10/10     Energy: -45.822405       Score: -49.606612       Rotamers: L8 L6 L0 W0 W0 W0     Residue Conf IDs: 8     46    0     8     4     34   
+
+result:
+	sequence: A42=CYS
+	K* score: 9.663736  in [9.373958 ,11.642887] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   CYS  
+Ensemble of 10 conformations:
+	 1/10     Energy: -44.087708       Score: -48.092831       Rotamers: L7 L2 W0 W0 W0 W0     Residue Conf IDs: 7     104   2     8     4     34   
+	 2/10     Energy: -44.010225       Score: -48.057438       Rotamers: L7 L2 L0 W0 W0 W0     Residue Conf IDs: 7     104   0     8     4     34   
+	 3/10     Energy: -43.737344       Score: -47.792725       Rotamers: L7 L0 W0 W0 W0 W0     Residue Conf IDs: 7     102   2     8     4     34   
+	 4/10     Energy: -43.662042       Score: -47.754241       Rotamers: L7 L0 L0 W0 W0 W0     Residue Conf IDs: 7     102   0     8     4     34   
+	 5/10     Energy: -43.447287       Score: -47.044233       Rotamers: W0 L2 W0 W0 W0 W0     Residue Conf IDs: 9     104   2     8     4     34   
+	 6/10     Energy: -43.389885       Score: -47.014223       Rotamers: W0 L2 L0 W0 W0 W0     Residue Conf IDs: 9     104   0     8     4     34   
+	 7/10     Energy: -43.377557       Score: -47.435302       Rotamers: L7 L2 L1 W0 W0 W0     Residue Conf IDs: 7     104   1     8     4     34   
+	 8/10     Energy: -43.135993       Score: -46.805511       Rotamers: W0 L0 W0 W0 W0 W0     Residue Conf IDs: 9     102   2     8     4     34   
+	 9/10     Energy: -43.076188       Score: -46.772411       Rotamers: W0 L0 L0 W0 W0 W0     Residue Conf IDs: 9     102   0     8     4     34   
+	10/10     Energy: -43.026985       Score: -47.136431       Rotamers: L7 L0 L1 W0 W0 W0     Residue Conf IDs: 7     102   1     8     4     34   
+
+result:
+	sequence: A42=asn
+	K* score: 9.632528  in [8.450655 ,11.571810] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   asn  
+Ensemble of 10 conformations:
+	 1/10     Energy: -44.626211       Score: -48.739355       Rotamers: L7 W0 W0 W0 W0 W0     Residue Conf IDs: 7     186   2     8     4     34   
+	 2/10     Energy: -44.553653       Score: -48.706020       Rotamers: L7 W0 L0 W0 W0 W0     Residue Conf IDs: 7     186   0     8     4     34   
+	 3/10     Energy: -44.017200       Score: -47.732141       Rotamers: W0 W0 W0 W0 W0 W0     Residue Conf IDs: 9     186   2     8     4     34   
+	 4/10     Energy: -43.964159       Score: -47.704190       Rotamers: W0 W0 L0 W0 W0 W0     Residue Conf IDs: 9     186   0     8     4     34   
+	 5/10     Energy: -43.901954       Score: -48.068780       Rotamers: L7 W0 L1 W0 W0 W0     Residue Conf IDs: 7     186   1     8     4     34   
+	 6/10     Energy: -43.801330       Score: -47.870957       Rotamers: L7 L5 W0 W0 W0 W0     Residue Conf IDs: 7     5     2     8     4     34   
+	 7/10     Energy: -43.727301       Score: -47.836502       Rotamers: L7 L5 L0 W0 W0 W0     Residue Conf IDs: 7     5     0     8     4     34   
+	 8/10     Energy: -43.312388       Score: -47.085372       Rotamers: L8 W0 W0 W0 W0 W0     Residue Conf IDs: 8     186   2     8     4     34   
+	 9/10     Energy: -43.311096       Score: -47.056901       Rotamers: W0 W0 L1 W0 W0 W0     Residue Conf IDs: 9     186   1     8     4     34   
+	10/10     Energy: -43.253285       Score: -47.056542       Rotamers: L8 W0 L0 W0 W0 W0     Residue Conf IDs: 8     186   0     8     4     34   
+
+result:
+	sequence: A42=TYR
+	K* score: 9.681152  in [9.349024 ,11.545762] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   TYR  
+Ensemble of 10 conformations:
+	 1/10     Energy: -46.609813       Score: -50.690962       Rotamers: L7 L5 W0 W0 W0 W0     Residue Conf IDs: 7     60    2     8     4     34   
+	 2/10     Energy: -46.536767       Score: -50.655359       Rotamers: L7 L5 L0 W0 W0 W0     Residue Conf IDs: 7     60    0     8     4     34   
+	 3/10     Energy: -46.458592       Score: -50.553295       Rotamers: L7 L4 W0 W0 W0 W0     Residue Conf IDs: 7     59    2     8     4     34   
+	 4/10     Energy: -46.378939       Score: -50.517612       Rotamers: L7 L4 L0 W0 W0 W0     Residue Conf IDs: 7     59    0     8     4     34   
+	 5/10     Energy: -45.974209       Score: -49.642802       Rotamers: W0 L5 W0 W0 W0 W0     Residue Conf IDs: 9     60    2     8     4     34   
+	 6/10     Energy: -45.913168       Score: -49.612583       Rotamers: W0 L5 L0 W0 W0 W0     Residue Conf IDs: 9     60    0     8     4     34   
+	 7/10     Energy: -45.900407       Score: -50.029955       Rotamers: L7 L5 L1 W0 W0 W0     Residue Conf IDs: 7     60    1     8     4     34   
+	 8/10     Energy: -45.806419       Score: -49.483522       Rotamers: W0 L4 W0 W0 W0 W0     Residue Conf IDs: 9     59    2     8     4     34   
+	 9/10     Energy: -45.746510       Score: -49.453223       Rotamers: W0 L4 L0 W0 W0 W0     Residue Conf IDs: 9     59    0     8     4     34   
+	10/10     Energy: -45.745887       Score: -49.892665       Rotamers: L7 L4 L1 W0 W0 W0     Residue Conf IDs: 7     59    1     8     4     34   
+
+result:
+	sequence: A42=PHE
+	K* score: 9.613341  in [9.342357 ,11.443198] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   PHE  
+Ensemble of 10 conformations:
+	 1/10     Energy: -45.994244       Score: -50.062006       Rotamers: L7 L2 W0 W0 W0 W0     Residue Conf IDs: 7     38    2     8     4     34   
+	 2/10     Energy: -45.924681       Score: -50.026319       Rotamers: L7 L2 L0 W0 W0 W0     Residue Conf IDs: 7     38    0     8     4     34   
+	 3/10     Energy: -45.354480       Score: -49.002604       Rotamers: W0 L2 W0 W0 W0 W0     Residue Conf IDs: 9     38    2     8     4     34   
+	 4/10     Energy: -45.299666       Score: -48.972300       Rotamers: W0 L2 L0 W0 W0 W0     Residue Conf IDs: 9     38    0     8     4     34   
+	 5/10     Energy: -45.279286       Score: -49.401944       Rotamers: L7 L2 L1 W0 W0 W0     Residue Conf IDs: 7     38    1     8     4     34   
+	 6/10     Energy: -44.659716       Score: -48.371994       Rotamers: L8 L2 W0 W0 W0 W0     Residue Conf IDs: 8     38    2     8     4     34   
+	 7/10     Energy: -44.658601       Score: -48.337876       Rotamers: W0 L2 L1 W0 W0 W0     Residue Conf IDs: 9     38    1     8     4     34   
+	 8/10     Energy: -44.601035       Score: -48.340811       Rotamers: L8 L2 L0 W0 W0 W0     Residue Conf IDs: 8     38    0     8     4     34   
+	 9/10     Energy: -44.480731       Score: -48.836120       Rotamers: L7 L2 W0 W0 L1 W0     Residue Conf IDs: 7     38    2     8     1     34   
+	10/10     Energy: -44.437255       Score: -48.818418       Rotamers: L7 L2 L0 W0 L1 W0     Residue Conf IDs: 7     38    0     8     1     34   
+
+result:
+	sequence: A42=ILE
+	K* score: 9.765476  in [9.644770 ,11.400107] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   ILE  
+Ensemble of 10 conformations:
+	 1/10     Energy: -45.357765       Score: -49.487377       Rotamers: L7 L1 W0 W0 W0 W0     Residue Conf IDs: 7     12    2     8     4     34   
+	 2/10     Energy: -45.281965       Score: -49.450467       Rotamers: L7 L1 L0 W0 W0 W0     Residue Conf IDs: 7     12    0     8     4     34   
+	 3/10     Energy: -44.727816       Score: -48.432362       Rotamers: W0 L1 W0 W0 W0 W0     Residue Conf IDs: 9     12    2     8     4     34   
+	 4/10     Energy: -44.665879       Score: -48.400836       Rotamers: W0 L1 L0 W0 W0 W0     Residue Conf IDs: 9     12    0     8     4     34   
+	 5/10     Energy: -44.647713       Score: -48.838270       Rotamers: L7 L1 L1 W0 W0 W0     Residue Conf IDs: 7     12    1     8     4     34   
+	 6/10     Energy: -44.036614       Score: -47.778590       Rotamers: W0 L1 L1 W0 W0 W0     Residue Conf IDs: 9     12    1     8     4     34   
+	 7/10     Energy: -44.031586       Score: -47.796560       Rotamers: L8 L1 W0 W0 W0 W0     Residue Conf IDs: 8     12    2     8     4     34   
+	 8/10     Energy: -43.967192       Score: -47.764155       Rotamers: L8 L1 L0 W0 W0 W0     Residue Conf IDs: 8     12    0     8     4     34   
+	 9/10     Energy: -43.825163       Score: -48.254292       Rotamers: L7 L1 W0 W0 L1 W0     Residue Conf IDs: 7     12    2     8     1     34   
+	10/10     Energy: -43.781081       Score: -48.235368       Rotamers: L7 L1 L0 W0 L1 W0     Residue Conf IDs: 7     12    0     8     1     34   
+
+result:
+	sequence: A42=VAL
+	K* score: 9.663583  in [9.521298 ,11.355085] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   VAL  
+Ensemble of 10 conformations:
+	 1/10     Energy: -44.879732       Score: -49.028029       Rotamers: L7 L2 W0 W0 W0 W0     Residue Conf IDs: 7     10    2     8     4     34   
+	 2/10     Energy: -44.806161       Score: -48.991853       Rotamers: L7 L2 L0 W0 W0 W0     Residue Conf IDs: 7     10    0     8     4     34   
+	 3/10     Energy: -44.253299       Score: -47.982585       Rotamers: W0 L2 W0 W0 W0 W0     Residue Conf IDs: 9     10    2     8     4     34   
+	 4/10     Energy: -44.195090       Score: -47.951793       Rotamers: W0 L2 L0 W0 W0 W0     Residue Conf IDs: 9     10    0     8     4     34   
+	 5/10     Energy: -44.174516       Score: -48.378230       Rotamers: L7 L2 L1 W0 W0 W0     Residue Conf IDs: 7     10    1     8     4     34   
+	 6/10     Energy: -43.563934       Score: -47.328121       Rotamers: W0 L2 L1 W0 W0 W0     Residue Conf IDs: 9     10    1     8     4     34   
+	 7/10     Energy: -43.553847       Score: -47.344418       Rotamers: L8 L2 W0 W0 W0 W0     Residue Conf IDs: 8     10    2     8     4     34   
+	 8/10     Energy: -43.495023       Score: -47.312747       Rotamers: L8 L2 L0 W0 W0 W0     Residue Conf IDs: 8     10    0     8     4     34   
+	 9/10     Energy: -43.353344       Score: -47.794881       Rotamers: L7 L2 W0 W0 L1 W0     Residue Conf IDs: 7     10    2     8     1     34   
+	10/10     Energy: -43.308867       Score: -47.776691       Rotamers: L7 L2 L0 W0 L1 W0     Residue Conf IDs: 7     10    0     8     1     34   
+
+result:
+	sequence: A42=LEU
+	K* score: 9.574872  in [9.241600 ,11.327786] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   LEU  
+Ensemble of 10 conformations:
+	 1/10     Energy: -43.761373       Score: -48.449251       Rotamers: L7 L4 W0 W0 W0 W0     Residue Conf IDs: 7     22    2     8     4     34   
+	 2/10     Energy: -43.689279       Score: -48.413410       Rotamers: L7 L4 L0 W0 W0 W0     Residue Conf IDs: 7     22    0     8     4     34   
+	 3/10     Energy: -43.138883       Score: -47.423107       Rotamers: W0 L4 W0 W0 W0 W0     Residue Conf IDs: 9     22    2     8     4     34   
+	 4/10     Energy: -43.079166       Score: -47.392650       Rotamers: W0 L4 L0 W0 W0 W0     Residue Conf IDs: 9     22    0     8     4     34   
+	 5/10     Energy: -43.051634       Score: -47.784174       Rotamers: L7 L4 L1 W0 W0 W0     Residue Conf IDs: 7     22    1     8     4     34   
+	 6/10     Energy: -42.440609       Score: -46.781335       Rotamers: L8 L4 W0 W0 W0 W0     Residue Conf IDs: 8     22    2     8     4     34   
+	 7/10     Energy: -42.439461       Score: -46.753365       Rotamers: W0 L4 L1 W0 W0 W0     Residue Conf IDs: 9     22    1     8     4     34   
+	 8/10     Energy: -42.378345       Score: -46.749999       Rotamers: L8 L4 L0 W0 W0 W0     Residue Conf IDs: 8     22    0     8     4     34   
+	 9/10     Energy: -42.243147       Score: -47.223824       Rotamers: L7 L4 W0 W0 L1 W0     Residue Conf IDs: 7     22    2     8     1     34   
+	10/10     Energy: -42.201735       Score: -47.205969       Rotamers: L7 L4 L0 W0 L1 W0     Residue Conf IDs: 7     22    0     8     1     34   
+
+result:
+	sequence: A42=ALA
+	K* score: 9.534863  in [8.663831 ,11.170323] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   ALA  
+Ensemble of 10 conformations:
+	 1/10     Energy: -43.580452       Score: -47.552749       Rotamers: L7 L W0 W0 W0 W0     Residue Conf IDs: 7     7     2     8     4     34   
+	 2/10     Energy: -43.504382       Score: -47.517798       Rotamers: L7 L L0 W0 W0 W0     Residue Conf IDs: 7     7     0     8     4     34   
+	 3/10     Energy: -42.958624       Score: -46.523745       Rotamers: W0 L W0 W0 W0 W0     Residue Conf IDs: 9     7     2     8     4     34   
+	 4/10     Energy: -42.898021       Score: -46.494177       Rotamers: W0 L L0 W0 W0 W0     Residue Conf IDs: 9     7     0     8     4     34   
+	 5/10     Energy: -42.866625       Score: -46.894092       Rotamers: L7 L L1 W0 W0 W0     Residue Conf IDs: 7     7     1     8     4     34   
+	 6/10     Energy: -42.258860       Score: -45.860423       Rotamers: W0 L L1 W0 W0 W0     Residue Conf IDs: 9     7     1     8     4     34   
+	 7/10     Energy: -42.252615       Score: -45.876873       Rotamers: L8 L W0 W0 W0 W0     Residue Conf IDs: 8     7     2     8     4     34   
+	 8/10     Energy: -42.193263       Score: -45.846427       Rotamers: L8 L L0 W0 W0 W0     Residue Conf IDs: 8     7     0     8     4     34   
+	 9/10     Energy: -42.073941       Score: -46.330378       Rotamers: L7 L W0 W0 L1 W0     Residue Conf IDs: 7     7     2     8     1     34   
+	10/10     Energy: -42.032650       Score: -46.313413       Rotamers: L7 L L0 W0 L1 W0     Residue Conf IDs: 7     7     0     8     1     34   
+
+result:
+	sequence: A42=ARG
+	K* score: 9.177737  in [8.296525 ,11.162050] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   ARG  
+Ensemble of 10 conformations:
+	 1/10     Energy: -45.814208       Score: -50.275023       Rotamers: L7 L31 W0 W0 W0 W0     Residue Conf IDs: 7     99    2     8     4     34   
+	 2/10     Energy: -45.735790       Score: -50.242275       Rotamers: L7 L31 L0 W0 W0 W0     Residue Conf IDs: 7     99    0     8     4     34   
+	 3/10     Energy: -45.297361       Score: -49.715438       Rotamers: L7 L23 W0 W0 W0 W0     Residue Conf IDs: 7     91    2     8     4     34   
+	 4/10     Energy: -45.233728       Score: -49.212144       Rotamers: W0 L31 W0 W0 W0 W0     Residue Conf IDs: 9     99    2     8     4     34   
+	 5/10     Energy: -45.219912       Score: -49.681419       Rotamers: L7 L23 L0 W0 W0 W0     Residue Conf IDs: 7     91    0     8     4     34   
+	 6/10     Energy: -45.219127       Score: -49.340684       Rotamers: L7 L24 W0 W0 W0 W0     Residue Conf IDs: 7     92    2     8     4     34   
+	 7/10     Energy: -45.167535       Score: -49.546509       Rotamers: L7 L28 W0 W0 W0 W0     Residue Conf IDs: 7     96    2     8     4     34   
+	 8/10     Energy: -45.165765       Score: -49.184779       Rotamers: W0 L31 L0 W0 W0 W0     Residue Conf IDs: 9     99    0     8     4     34   
+	 9/10     Energy: -45.144005       Score: -49.306344       Rotamers: L7 L24 L0 W0 W0 W0     Residue Conf IDs: 7     92    0     8     4     34   
+	10/10     Energy: -45.099122       Score: -49.619299       Rotamers: L7 L31 L1 W0 W0 W0     Residue Conf IDs: 7     99    1     8     4     34   
+
+result:
+	sequence: A42=LYS
+	K* score: 9.168425  in [8.027299 ,11.134504] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   LYS  
+Ensemble of 10 conformations:
+	 1/10     Energy: -45.194809       Score: -49.334151       Rotamers: L7 L19 W0 W0 W0 W0     Residue Conf IDs: 7     142   2     8     4     34   
+	 2/10     Energy: -45.116310       Score: -49.299480       Rotamers: L7 L19 L0 W0 W0 W0     Residue Conf IDs: 7     142   0     8     4     34   
+	 3/10     Energy: -45.115715       Score: -49.544148       Rotamers: L7 L18 W0 W0 W0 W0     Residue Conf IDs: 7     141   2     8     4     34   
+	 4/10     Energy: -45.041529       Score: -49.510151       Rotamers: L7 L18 L0 W0 W0 W0     Residue Conf IDs: 7     141   0     8     4     34   
+	 5/10     Energy: -44.999114       Score: -49.204105       Rotamers: L7 L21 W0 W0 W0 W0     Residue Conf IDs: 7     144   2     8     4     34   
+	 6/10     Energy: -44.922185       Score: -49.170068       Rotamers: L7 L21 L0 W0 W0 W0     Residue Conf IDs: 7     144   0     8     4     34   
+	 7/10     Energy: -44.775822       Score: -49.313934       Rotamers: L7 L22 W0 W0 W0 W0     Residue Conf IDs: 7     145   2     8     4     34   
+	 8/10     Energy: -44.700838       Score: -49.280373       Rotamers: L7 L22 L0 W0 W0 W0     Residue Conf IDs: 7     145   0     8     4     34   
+	 9/10     Energy: -44.679248       Score: -48.850963       Rotamers: L7 L17 W0 W0 W0 W0     Residue Conf IDs: 7     140   2     8     4     34   
+	10/10     Energy: -44.605785       Score: -48.816037       Rotamers: L7 L17 L0 W0 W0 W0     Residue Conf IDs: 7     140   0     8     4     34   
+
+result:
+	sequence: A42=GLY
+	K* score: 9.499004  in [8.627062 ,11.129685] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   GLY  
+Ensemble of 10 conformations:
+	 1/10     Energy: -43.101693       Score: -47.077860       Rotamers: L7 L W0 W0 W0 W0     Residue Conf IDs: 7     114   2     8     4     34   
+	 2/10     Energy: -43.027613       Score: -47.044643       Rotamers: L7 L L0 W0 W0 W0     Residue Conf IDs: 7     114   0     8     4     34   
+	 3/10     Energy: -42.484837       Score: -46.053710       Rotamers: W0 L W0 W0 W0 W0     Residue Conf IDs: 9     114   2     8     4     34   
+	 4/10     Energy: -42.426604       Score: -46.025877       Rotamers: W0 L L0 W0 W0 W0     Residue Conf IDs: 9     114   0     8     4     34   
+	 5/10     Energy: -42.387112       Score: -46.415207       Rotamers: L7 L L1 W0 W0 W0     Residue Conf IDs: 7     114   1     8     4     34   
+	 6/10     Energy: -41.784116       Score: -45.386392       Rotamers: W0 L L1 W0 W0 W0     Residue Conf IDs: 9     114   1     8     4     34   
+	 7/10     Energy: -41.776842       Score: -45.403801       Rotamers: L8 L W0 W0 W0 W0     Residue Conf IDs: 8     114   2     8     4     34   
+	 8/10     Energy: -41.714560       Score: -45.375089       Rotamers: L8 L L0 W0 W0 W0     Residue Conf IDs: 8     114   0     8     4     34   
+	 9/10     Energy: -41.606733       Score: -45.859700       Rotamers: L7 L W0 W0 L1 W0     Residue Conf IDs: 7     114   2     8     1     34   
+	10/10     Energy: -41.561251       Score: -45.844468       Rotamers: L7 L L0 W0 L1 W0     Residue Conf IDs: 7     114   0     8     1     34   
+
+result:
+	sequence: A42=HIS
+	K* score: 8.755709  in [8.154584 ,10.743251] (log10)
+Residues           A41   A42   A43   A47   C410  C414 complex Sequence   HIS  
+Ensemble of 10 conformations:
+	 1/10     Energy: -46.425482       Score: -50.771289       Rotamers: L7 L7 W0 W0 W0 W0     Residue Conf IDs: 7     122   2     8     4     34   
+	 2/10     Energy: -46.346817       Score: -50.736543       Rotamers: L7 L7 L0 W0 W0 W0     Residue Conf IDs: 7     122   0     8     4     34   
+	 3/10     Energy: -45.954999       Score: -50.211456       Rotamers: L7 L5 W0 W0 W0 W0     Residue Conf IDs: 7     120   2     8     4     34   
+	 4/10     Energy: -45.877099       Score: -50.176075       Rotamers: L7 L5 L0 W0 W0 W0     Residue Conf IDs: 7     120   0     8     4     34   
+	 5/10     Energy: -45.823266       Score: -49.641537       Rotamers: W0 L7 W0 W0 W0 W0     Residue Conf IDs: 9     122   2     8     4     34   
+	 6/10     Energy: -45.761513       Score: -49.612175       Rotamers: W0 L7 L0 W0 W0 W0     Residue Conf IDs: 9     122   0     8     4     34   
+	 7/10     Energy: -45.703659       Score: -50.109917       Rotamers: L7 L7 L1 W0 W0 W0     Residue Conf IDs: 7     122   1     8     4     34   
+	 8/10     Energy: -45.336686       Score: -49.094285       Rotamers: W0 L5 W0 W0 W0 W0     Residue Conf IDs: 9     120   2     8     4     34   
+	 9/10     Energy: -45.270609       Score: -49.064287       Rotamers: W0 L5 L0 W0 W0 W0     Residue Conf IDs: 9     120   0     8     4     34   
+	10/10     Energy: -45.235659       Score: -49.553258       Rotamers: L7 L5 L1 W0 W0 W0     Residue Conf IDs: 7     120   1     8     4     34   
+
