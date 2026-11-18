@@ -3,6 +3,9 @@ import pandas as pd
 import time
 import os
 import importlib
+import shutil
+import re
+import subprocess
 from install_pymol import ensure_pymol
 
 # ── Ensure PyMOL is available in this interpreter (cached so it only
@@ -13,7 +16,11 @@ def _pymol_ready():
 
 pymol_ok = _pymol_ready()
 if not pymol_ok:
-    st.sidebar.error("⚠️ PyMOL not available — Step 5 will not work.")
+    st.sidebar.error(
+        "⚠️ PyMOL not available in this Python — PDB repair (Step 1) will fail for "
+        "structures with missing atoms/residues. Launch the app with run_app.bat "
+        "(uses the pymol-env conda environment)."
+    )
 
 # Importing the script files
 import logic
@@ -21,18 +28,14 @@ import logic2
 import logic3
 import logic4
 import logic5
-import logic6
-import logic7
 
 importlib.reload(logic)
 importlib.reload(logic2)
 importlib.reload(logic3)
 importlib.reload(logic4)
 importlib.reload(logic5)
-importlib.reload(logic6)
-importlib.reload(logic7)
 
-# Used in Step 3 to figure out which three-letter amino acid code corresponds to wild-type residue code
+# Used in Step 2 (OSPREY) to figure out which three-letter amino acid code corresponds to wild-type residue code
 AA_1TO3 = {
     'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS',
     'Q': 'GLN', 'E': 'GLU', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE',
@@ -40,36 +43,260 @@ AA_1TO3 = {
     'S': 'SER', 'T': 'THR', 'W': 'TRP', 'Y': 'TYR', 'V': 'VAL',
 }
 
-#Page Configuration
+# ── Hardware detection: Step 2 defaults come from the user's own machine ─────
+def _total_ram_mib():
+    """Total physical RAM in MiB, or None if it can't be determined."""
+    try:
+        import psutil
+        return psutil.virtual_memory().total // (1024 * 1024)
+    except Exception:
+        pass
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class _MemStatus(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = _MemStatus()
+            stat.dwLength = ctypes.sizeof(_MemStatus)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                return stat.ullTotalPhys // (1024 * 1024)
+        else:
+            return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
+    except Exception:
+        pass
+    return None
+
+
+def _cpu_threads():
+    """CPU threads this process is allowed to use."""
+    try:
+        return len(os.sched_getaffinity(0))   # Linux: respects cluster/container limits
+    except AttributeError:
+        return os.cpu_count() or 1            # Windows / macOS
+
+
+def _nvidia_gpu_count():
+    """Number of NVIDIA GPUs reported by nvidia-smi (OSPREY's GPU mode needs CUDA)."""
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return 0
+    try:
+        out = subprocess.run([exe, "--query-gpu=name", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=10)
+        if out.returncode != 0:
+            return 0
+        return len([ln for ln in out.stdout.splitlines() if ln.strip()])
+    except Exception:
+        return 0
+
+
+@st.cache_resource
+def detect_hardware():
+    """
+    Detect this computer's resources once per app session and derive defaults:
+      heap    = 70% of physical RAM (leaves room for the OS, Streamlit and the
+                JVM's own non-heap memory), rounded down to a whole GiB
+      garbage = 1/8 of the heap, rounded down to 256 MiB (min 512)
+    """
+    ram   = _total_ram_mib()
+    cores = _cpu_threads()
+    gpus  = _nvidia_gpu_count()
+
+    if ram:
+        heap = max(1024, int(ram * 0.70) // 1024 * 1024)
+    else:
+        heap = None
+    garbage = max(512, (heap // 8) // 256 * 256) if heap else None
+
+    return {"ram_mib": ram, "cores": cores, "gpus": gpus,
+            "heap_mib": heap, "garbage_mib": garbage}
+
+
+# Page Configuration
 st.set_page_config(page_title="Davis Lab Redesign", layout="wide")
 
-#UI Header
-st.title("CaM-RyR2 Protein Redesign Portal")
+# UI Header
+st.title("Protein Redesign Portal")
 st.markdown("""
 **Status:** Unified Workflow v1.0 (Draft)  
 *Meeting ISO/IEC 25010:2023 Efficiency Standards*
 """)
 
 st.sidebar.header("Pipeline Controls")
-workflow_step = st.sidebar.radio("Navigate Workflow", 
-    ["1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics"],
-    key="workflow_step")
+ABOUT = "About"
+workflow_step = st.sidebar.radio(
+    "Navigate Workflow", 
+    [ABOUT, "1. Data Input", "2. OSPREY Execution", "3. Results & Analytics"],
+    key="workflow_step"
+)
 
 # ── "Next step" button shown at the bottom of each page ──────────────────────
 def _go_to_step(target):
     st.session_state["workflow_step"] = target
 
-def next_step_button(target, label, ready = True):
+def next_step_button(target, label, ready=True):
     if not ready:
         return
     st.markdown("---")
     st.button(f"{label}  ➡️", key=f"next_to_{target}", on_click=_go_to_step,
               args=(target,), type="primary", use_container_width=True)
 
+# ── Automatic residue range (replaces the old manual Step 2) ─────────────────
+def _resnum_value(key, chain_id):
+    """'A148' -> 148, 'B-3' -> -3, 'A52A' (insertion code) -> 52."""
+    m = re.match(r"-?\d+", key[len(chain_id):])
+    return int(m.group()) if m else None
+
+def auto_residue_range(pdb_path, chain_id, chain_results=None):
+    """
+    Return (first, last) residue labels for a chain, e.g. ('A0', 'A148'),
+    using the lowest and highest residue numbers present in the PDB.
+    Falls back to 1..length from chain identification if the PDB can't be read.
+    """
+    residue_map = {}
+    if pdb_path and os.path.exists(pdb_path):
+        try:
+            residue_map = logic.get_residue_numbers(pdb_path)
+        except Exception:
+            residue_map = {}
+
+    keys = [k for k in residue_map.get(chain_id, []) if _resnum_value(k, chain_id) is not None]
+    if keys:
+        first = min(keys, key=lambda k: _resnum_value(k, chain_id))
+        last  = max(keys, key=lambda k: _resnum_value(k, chain_id))
+        return first, last
+
+    if chain_results and chain_id in chain_results:
+        return f"{chain_id}1", f"{chain_id}{chain_results[chain_id]['length']}"
+
+    raise ValueError(f"Could not determine residue range for chain {chain_id}.")
+
+# ── Per-chain-combination output folders ─────────────────────────────────────
+# A structure like 1CDL holds several copies of the same complex, so the same
+# PDB can be analysed as A+B, C+D, A+D, and so on. Each pairing gets its own
+# folder, so its PRPPI JSON, OSPREY scripts, stdout and cached energy matrices
+# (emat.*.dat) can never be mistaken for another pairing's.
+#
+#   GUI_results/<pdb stem>/<cam>-<ligand>/{pdb_files, prppi_json, osprey_output}
+
+def combo_key(cam_chain, ligand_chain):
+    """Folder name for a chain pairing, e.g. ('A', 'B') -> 'A-B'."""
+    return f"{cam_chain}-{ligand_chain}"
+
+
+def make_combo_dirs(pdb_sub_dir, combo):
+    """Create (and return) this chain combination's three working folders."""
+    combo_dir = os.path.join(pdb_sub_dir, combo)
+    dirs = {name: os.path.join(combo_dir, name)
+            for name in ("pdb_files", "prppi_json", "osprey_output")}
+    for d in dirs.values():
+        os.makedirs(d, exist_ok=True)
+    return combo_dir, dirs
+
+
+def activate_combo(combo):
+    """
+    Switch the app over to a chain combination: save whatever the current
+    combination has scanned, then load this one's stored results (or clear the
+    Step 1-3 state if it has not been run yet).
+    """
+    runs    = st.session_state.setdefault("runs", {})
+    current = st.session_state.get("active_combo")
+
+    if current and current in runs:
+        runs[current]["scanned"] = list(st.session_state.get("scanned_residues", []))
+
+    st.session_state["active_combo"] = combo
+    saved = runs.get(combo)
+
+    # Results from another combination must not leak into this one's Step 2 / Step 3
+    for k in ("json_path", "analysis_result", "step3_result", "step3_done",
+              "step3_target_res", "saved_mutations", "osprey_scripts"):
+        st.session_state.pop(k, None)
+
+    if saved:
+        st.session_state["json_path"]       = saved["json_path"]
+        st.session_state["path"]            = saved["path"]
+        st.session_state["json_dir"]        = saved["json_dir"]
+        st.session_state["osprey_dir"]      = saved["osprey_dir"]
+        st.session_state["analysis_result"] = saved["analysis_result"]
+        st.session_state["scanned_residues"] = list(saved.get("scanned", []))
+    else:
+        st.session_state["path"] = st.session_state.get("orig_path")
+        st.session_state["scanned_residues"] = []
+        for k in ("json_dir", "osprey_dir"):
+            st.session_state.pop(k, None)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Step 0: About Section
+# ═══════════════════════════════════════════════════════════════════════════════
+if workflow_step == ABOUT:
+    st.header("About the Protein Redesign Portal")
+
+    st.markdown("""
+    ### Overview
+
+    The **Protein Redesign Portal** is a Streamlit-based application developed to simplify the process of evaluating protein-protein interactions and screening mutations. 
+    It brings together several computational tools into one interface, allowing users to upload a protein structure, identify interacting residues, prepare input files, 
+    run OSPREY calculations, and analyze mutation scores.
+
+    ---
+
+    ### Workflow Overview
+
+    The portal guides users through three main stages:
+
+    **1. Data Input & Structure Preparation**
+    - Upload a PDB file and identify the protein chains involved in the complex.
+    - Manually select the chains when automatic identification is ambiguous or multiple chains are present.
+    - Check and repair missing residues or incomplete side chains using PDBFixer and PyMOL.
+    - Run PRPPI to identify interacting residues between protein chains and generate a JSON file.
+        - **JSON:** A structured file format used to store interaction data for further processing.
+    - Residue ranges for the design are set automatically from the first and last residue of each selected chain.
+
+    **2. OSPREY Execution**
+    - Select mutation sites and amino acid substitutions.
+    - Configure and run OSPREY BBK* calculations.
+        - **OSPREY:** A protein design software package that evaluates how mutations may affect protein-protein binding.    
+
+    **3. Results & Analysis**
+    - Analyze and compare mutant and wild-type K* scores using ΔK*.
+    - View results through heatmaps and summary tables.
+    - Export results as CSV files.
+
+    ---
+
+    ### Technology Stack
+
+    | Component | Technology |
+    |---|---|
+    | User Interface | Streamlit |
+    | Structural Analysis | Biopython |
+    | Structure Preparation | PDBFixer, OpenMM |
+    | Protein Design | OSPREY (BBK*) |
+    | Interaction Analysis | PRPPI |
+    | Data Processing | Pandas, NumPy |
+
+    """)
+
+    next_step_button("1. Data Input", "Begin with Data Input")
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 1: Data Input
 # ═══════════════════════════════════════════════════════════════════════════════
-if workflow_step == "1. Data Input":
+elif workflow_step == "1. Data Input":
     st.header("Step 1: Structural Data Input")
 
     uploaded_pdb = st.file_uploader("Upload Target PDB File", type=['pdb'], key="pdb_uploader")
@@ -81,15 +308,29 @@ if workflow_step == "1. Data Input":
             if k not in _PROTECTED:
                 del st.session_state[k]
 
-        os.makedirs("uploaded_pdbs", exist_ok=True)
-        new_path = os.path.abspath(os.path.join("uploaded_pdbs", uploaded_pdb.name))
+        os.makedirs("GUI_results", exist_ok=True)
+        # Create a subfolder inside GUI_results named after the PDB file (without .pdb)
+        pdb_stem = os.path.splitext(uploaded_pdb.name)[0]
+        pdb_sub_dir = os.path.join("GUI_results", pdb_stem)
+        os.makedirs(pdb_sub_dir, exist_ok=True)
+
+        # The uploaded file is saved at the top of the PDB folder. The three working
+        # folders (pdb_files / prppi_json / osprey_output) are created later, once the
+        # chains are known, inside a folder named after the chain combination — see
+        # make_combo_dirs(). That keeps each chain pairing's results separate.
+        new_path = os.path.abspath(os.path.join(pdb_sub_dir, uploaded_pdb.name))
         with open(new_path, "wb") as f:
             f.write(uploaded_pdb.getvalue())
 
+        # Save these paths so other parts of the app can find them
+        st.session_state["pdb_sub_dir"] = pdb_sub_dir
+
         st.session_state["pdb_name"]  = uploaded_pdb.name
-        st.session_state["orig_path"] = new_path   # untouched upload; Run Analysis always starts from this
-        st.session_state["path"]      = new_path   # later steps read this (updated after repair/protonation)
+        st.session_state["orig_path"] = new_path
+        st.session_state["path"]      = new_path
         st.session_state["pdb_text"]  = uploaded_pdb.getvalue().decode("utf-8", errors="ignore")
+        # Per-chain-combination results, keyed by combination (e.g. "A-B")
+        st.session_state["runs"] = {}
 
     pdb_name = st.session_state.get("pdb_name")
 
@@ -127,14 +368,15 @@ if workflow_step == "1. Data Input":
 
             with st.expander("View chain identification results", expanded=True):
                 for chain_id, info in chain_results.items():
+                    mol_name = info.get("molecule_name", f"Chain {chain_id}")
                     if info["is_calmodulin"]:
                         if info.get("identity") is not None:
                             identity_msg = f" ({info['identity']}% identity to human CaM, {info['length']} residues)"
                         else:
                             identity_msg = f" ({info['length']} residues)"
-                        st.success(f"Chain **{chain_id}** → CALMODULIN{identity_msg}")
+                        st.success(f"Chain **{chain_id}** ({mol_name}) → CALMODULIN{identity_msg}")
                     else:
-                        st.info(f"Chain **{chain_id}** → Ligand / peptide ({info['length']} residues)")
+                        st.info(f"Chain **{chain_id}** ({mol_name}) → Ligand / peptide ({info['length']} residues)")
 
             all_chains     = list(chain_results.keys())
             cam_candidates = [c for c in all_chains if chain_results[c]["is_calmodulin"]]
@@ -159,8 +401,8 @@ if workflow_step == "1. Data Input":
             elif needs_choice:
                 st.warning(
                     "Multiple chains detected (or CaM could not be resolved automatically). "
-                    "Select which chain is the **calmodulin** and which is the "
-                    "**peptide/ligand (residue) chain**."
+                    "Please select which chain is the **main protein chain** and which is the "
+                    "**ligand/partner chain**."
                 )
 
                 def _rank(c):
@@ -183,7 +425,7 @@ if workflow_step == "1. Data Input":
                 col_a, col_b = st.columns(2)
                 with col_a:
                     cam_chain = st.selectbox(
-                        "Calmodulin chain",
+                        "Main protein chain",
                         all_chains,
                         index=cam_index,
                         placeholder="Select calmodulin chain",
@@ -199,7 +441,7 @@ if workflow_step == "1. Data Input":
                         default_lig = next((c for c in lig_options if c in other_chains), lig_options[0])
                         lig_index = lig_options.index(default_lig)
                     ligand_chain = st.selectbox(
-                        "Peptide / ligand chain",
+                        "Ligand / partner chain",
                         lig_options,
                         index=lig_index,
                         placeholder="Select peptide / ligand chain",
@@ -212,10 +454,23 @@ if workflow_step == "1. Data Input":
             st.session_state["cam_chain"]    = cam_chain
             st.session_state["ligand_chain"] = ligand_chain
 
+            # The chain pairing decides which results folder is in use, so switching
+            # the selection switches the app over to that pairing's own results.
+            if cam_chain and ligand_chain:
+                combo = combo_key(cam_chain, ligand_chain)
+                if combo != st.session_state.get("active_combo"):
+                    activate_combo(combo)
+                if st.session_state.get("runs", {}).get(combo):
+                    st.caption(f"Showing saved results for chains **{combo}**.")
+                other = [c for c in st.session_state.get("runs", {}) if c != combo]
+                if other:
+                    st.caption("Also analysed this session: " + ", ".join(sorted(other))
+                               + ". Re-select a pairing above to see its results.")
+
         # ── Gate: for >2 chains, wait for a selection before inspecting ───
         if chain_results and len(chain_results) > 2 and not (cam_chain and ligand_chain):
             st.info("Select the calmodulin and peptide/ligand chains above to continue.")
-            st.stop()
+            st.stop()      
 
         # ── PDB Inspection ────────────────────────────────────────────────
         # Runs logic5.get_inspection_report() and shows the user what problems were found before the repair step.
@@ -279,6 +534,25 @@ if workflow_step == "1. Data Input":
             ligand_chain = st.session_state.get("ligand_chain")
             repair_info  = None
 
+            if not cam_chain or not ligand_chain:
+                st.error("❌ Select the main protein chain and the ligand / partner chain "
+                         "before running the analysis.")
+                st.stop()
+
+            # Step 0: this pairing's own folders, and a private copy of the PDB to work on.
+            # Everything downstream (repair, protonation, PRPPI, OSPREY) writes next to
+            # this copy, so one pairing's files never overwrite another's.
+            combo = combo_key(cam_chain, ligand_chain)
+            combo_dir, combo_dirs = make_combo_dirs(st.session_state["pdb_sub_dir"], combo)
+            st.session_state["json_dir"]   = combo_dirs["prppi_json"]
+            st.session_state["osprey_dir"] = combo_dirs["osprey_output"]
+            st.session_state["active_combo"] = combo
+
+            path = os.path.abspath(os.path.join(
+                combo_dirs["pdb_files"], os.path.basename(st.session_state["orig_path"])))
+            shutil.copy(st.session_state["orig_path"], path)
+            st.session_state["path"] = path
+
             # Step A: PDB repair (runs logic5 before prppi)
             if report and (report["has_missing_residues"] or report["has_missing_sidechains"]):
                 if not cam_chain or not ligand_chain:
@@ -319,12 +593,55 @@ if workflow_step == "1. Data Input":
                 )
 
             if json_path:
+                # Copy JSON file into the prppi_json folder
+                target_json_path = os.path.join(
+                    st.session_state.get("json_dir", os.path.dirname(json_path)),
+                    os.path.basename(json_path),
+                )
+                if os.path.abspath(json_path) != os.path.abspath(target_json_path):
+                    shutil.copy(json_path, target_json_path)
+                    json_path = target_json_path
+
+                # Step D: set residue ranges automatically (min → max of each chain)
+                cam_chain_used = cam_chain or st.session_state.get("cam_chain")
+                lig_chain_used = ligand_chain or st.session_state.get("ligand_chain")
+                try:
+                    mutant_start, mutant_end = auto_residue_range(
+                        fixed_pdb, cam_chain_used, st.session_state.get("chain_results"))
+                    ligand_start, ligand_end = auto_residue_range(
+                        fixed_pdb, lig_chain_used, st.session_state.get("chain_results"))
+                    logic2.add_variables_to_json(json_path, mutant_start, mutant_end,
+                                                 ligand_start, ligand_end)
+                except Exception as e:
+                    st.error(f"❌ Could not set residue ranges automatically: {e}")
+                    st.stop()
+
+                ranges = {
+                    "mutant_start": mutant_start, "mutant_end": mutant_end,
+                    "ligand_start": ligand_start, "ligand_end": ligand_end,
+                }
+
+                analysis_result = {"repair": repair_info, "json_path": json_path,
+                                   "ranges": ranges, "combo": combo}
+
                 st.session_state["json_path"]       = json_path
                 st.session_state["step1_done_for"]  = pdb_name
-                st.session_state["analysis_result"] = {"repair": repair_info, "json_path": json_path}
-                st.session_state.pop("step2_done", None)
+                st.session_state["step1_done_combo"] = combo
+                st.session_state["analysis_result"] = analysis_result
                 st.session_state.pop("step3_done", None)
                 st.session_state.pop("step3_result", None)
+                st.session_state.pop("osprey_scripts", None)
+                st.session_state["scanned_residues"] = []
+
+                # Remember this pairing so re-selecting it later brings its results back
+                st.session_state.setdefault("runs", {})[combo] = {
+                    "json_path":       json_path,
+                    "path":            st.session_state["path"],
+                    "json_dir":        combo_dirs["prppi_json"],
+                    "osprey_dir":      combo_dirs["osprey_output"],
+                    "analysis_result": analysis_result,
+                    "scanned":         [],
+                }
 
         # ── Show the latest analysis results (persists across steps) ──────
         res = st.session_state.get("analysis_result")
@@ -345,159 +662,40 @@ if workflow_step == "1. Data Input":
             else:
                 st.info("PDB is complete — skipping repair step.")
 
+            if res.get("combo"):
+                st.caption(f"Chain pairing: **{res['combo']}** "
+                           f"(main protein – ligand). All files for this pairing are kept in "
+                           f"`{os.path.join(st.session_state.get('pdb_sub_dir', ''), res['combo'])}`.")
             st.success(f"Analysis complete! Results saved to: {res['json_path']}")
+            rng = res.get("ranges")
+            if rng:
+                st.info(
+                    f"Residue ranges set automatically — "
+                    f"Calmodulin (mutant): **{rng['mutant_start']} → {rng['mutant_end']}**, "
+                    f"Ligand: **{rng['ligand_start']} → {rng['ligand_end']}**"
+                )
             with st.expander("🔬 View JSON Contents"):
                 import json as jsonlib
                 with open(res["json_path"]) as f:
                     st.json(jsonlib.load(f))
 
-    next_step_button("2. JSON Processing", "Click to head to JSON Processing",
-                     ready=(pdb_name is not None and st.session_state.get("step1_done_for") == pdb_name))
-# ═══════════════════════════════════════════════════════════════════════════════
-# Step 2: JSON Processing  (unchanged)
-# ═══════════════════════════════════════════════════════════════════════════════
-elif workflow_step == "2. JSON Processing":
-    st.header("Step 2: JSON Processing")
-
-    json_path = st.session_state.get("json_path", None)
-
-    if json_path:
-        st.session_state["json_paths"] = [json_path]
-        st.session_state["json_path"] = json_path
-    else:
-        uploaded_jsons = st.file_uploader(
-            "Upload Interaction JSON(s)",
-            type=['json'],
-            accept_multiple_files=True
-        )
-        if uploaded_jsons:
-            os.makedirs("uploaded_jsons", exist_ok=True)
-            saved = []
-            for uploaded_json in uploaded_jsons:
-                save_path = os.path.abspath(os.path.join("uploaded_jsons", uploaded_json.name))
-                with open(save_path, "wb") as f:
-                    f.write(uploaded_json.getvalue())
-                saved.append(save_path)
-            st.session_state["json_paths"] = saved
-            st.success(f"{len(saved)} JSON file(s) loaded:")
-            for p in saved:
-                st.write(f"• {p}")
-
-    json_paths = st.session_state.get("json_paths", [])
-
-    if json_paths:
-        import logic2
-        st.subheader("Set Residue Range Boundaries")
-
-        cam_chain     = st.session_state.get("cam_chain", None)
-        ligand_chain  = st.session_state.get("ligand_chain", None)
-        chain_results = st.session_state.get("chain_results", {})
-
-        pdb_path_for_residues = st.session_state.get("path", None)
-
-        residue_map = {}
-        if pdb_path_for_residues and os.path.exists(pdb_path_for_residues):
-            try:
-                residue_map = logic.get_residue_numbers(pdb_path_for_residues)
-            except Exception:
-                pass
-
-        def get_residue_options(chain_id):
-            if chain_id and residue_map:
-                options = residue_map.get(chain_id, [])
-                if options:
-                    return options
-            if chain_id and chain_id in chain_results:
-                length = chain_results[chain_id]["length"]
-                return [f"{chain_id}{i}" for i in range(1, length + 1)]
-            return []
-
-        cam_options    = get_residue_options(cam_chain)
-        ligand_options = get_residue_options(ligand_chain)
-
-        if cam_chain and ligand_chain:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.success(f"Calmodulin chain: **{cam_chain}** ({chain_results[cam_chain]['length']} residues)")
-            with col2:
-                st.info(f"Ligand chain: **{ligand_chain}** ({chain_results[ligand_chain]['length']} residues)")
-        else:
-            st.warning("⚠️ Chain identification not found. Please complete Step 1 first, or enter ranges manually.")
-
-        def _idx(options, key, default):
-            val = st.session_state.get(key)
-            return options.index(val) if val in options else default
-
-        with st.form("residue_form"):
-
-            st.markdown("**Calmodulin (Mutant) Range**")
-            if cam_options:
-                col1, col2 = st.columns(2)
-                with col1:
-                    mutant_start = st.selectbox(
-                        "Mutant Beginning",
-                        options=cam_options,
-                        index=_idx(cam_options, "saved_mutant_start", 0)
-                    )
-                with col2:
-                    mutant_end = st.selectbox(
-                        "Mutant Ending",
-                        options=cam_options,
-                        index=_idx(cam_options, "saved_mutant_end", len(cam_options) - 1)
-                    )
-            else:
-                col1, col2 = st.columns(2)
-                with col1:
-                    mutant_start = st.text_input("Mutant Beginning", value=st.session_state.get("saved_mutant_start", ""))
-                with col2:
-                    mutant_end = st.text_input("Mutant Ending", value=st.session_state.get("saved_mutant_end", ""))
-
-            st.markdown("**Ligand Range**")
-            if ligand_options:
-                col1, col2 = st.columns(2)
-                with col1:
-                    ligand_start = st.selectbox(
-                        "Ligand Beginning",
-                        options=ligand_options,
-                        index=_idx(ligand_options, "saved_ligand_start", 0)
-                    )
-                with col2:
-                    ligand_end = st.selectbox(
-                        "Ligand Ending",
-                        options=ligand_options,
-                        index=_idx(ligand_options, "saved_ligand_end", len(ligand_options) - 1)
-                    )
-            else:
-                col1, col2 = st.columns(2)
-                with col1:
-                    ligand_start = st.text_input("Ligand Beginning", value=st.session_state.get("saved_ligand_start", ""))
-                with col2:
-                    ligand_end = st.text_input("Ligand Ending", value=st.session_state.get("saved_ligand_end", ""))
-
-            submitted = st.form_submit_button("▶ Process JSON(s)")
-
-        if submitted:
-            if not all([mutant_start, mutant_end, ligand_start, ligand_end]):
-                st.error("❌ Please fill in all four residue range fields before proceeding.")
-            else:
-                for json_file in json_paths:
-                    logic2.add_variables_to_json(json_file, mutant_start, mutant_end, ligand_start, ligand_end)
-                st.session_state.update({
-                    "saved_mutant_start": mutant_start, "saved_mutant_end": mutant_end,
-                    "saved_ligand_start": ligand_start, "saved_ligand_end": ligand_end,
-                    "step2_done": True,
-                })
-                st.success("All JSON files processed!")
-        elif st.session_state.get("step2_done"):
-            st.success("All JSON files processed!")
-
-    next_step_button("3. OSPREY Execution", "Click to head to OSPREY Execution", ready=st.session_state.get("step2_done", False))
+    next_step_button(
+        "2. OSPREY Execution", "Click to head to OSPREY Execution",
+        ready=(pdb_name is not None
+               and st.session_state.get("step1_done_for") == pdb_name
+               # the pairing currently selected must be the one that was analysed
+               and st.session_state.get("step1_done_combo") == st.session_state.get("active_combo")),
+    )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 3: OSPREY Execution
+# Step 2: OSPREY Execution
 # ═══════════════════════════════════════════════════════════════════════════════
-elif workflow_step == "3. OSPREY Execution":
-    st.header("Step 3: OSPREY Simulation Setup")
+elif workflow_step == "2. OSPREY Execution":
+    st.header("Step 2: OSPREY Simulation Setup")
+
+    if st.session_state.get("active_combo"):
+        st.caption(f"Chain pairing: **{st.session_state['active_combo']}** "
+                   "(change it in Step 1 to work on another pairing).")
     
     json_path = st.session_state.get("json_path", None)
     pdb_path  = st.session_state.get("path", None)
@@ -519,50 +717,99 @@ elif workflow_step == "3. OSPREY Execution":
         if isinstance(prev_targets, str):
             prev_targets = [prev_targets]
 
-        target_residues = st.multiselect(
-            "Select Residues to Mutate", 
-            options=residues,
-            default=[r for r in prev_targets if r in residues]
-        )
+        scanned = st.session_state.get("scanned_residues", [])
 
+        # ── Residue Selection ───────────────────────────────────────────────
+        def toggle_select_all_residues():
+            if st.session_state["select_all_res_key"]:
+                st.session_state["target_residues_key"] = residues
+            else:
+                st.session_state["target_residues_key"] = []
+
+        st.checkbox("Select All Residues", key="select_all_res_key", on_change=toggle_select_all_residues)
+
+        target_residues = st.multiselect(
+            "Select Residues to Mutate",
+            options=residues,
+            default=[r for r in prev_targets if r in residues],
+            key="target_residues_key",
+            format_func=lambda r: f"{r}  ✅ scanned" if r in scanned else r,
+        )
+        if scanned:
+            st.caption(f"Already scanned this session: {', '.join(scanned)}. "
+                       "Pick additional residues to keep adding to the results.")
+
+        # Reset saved mutations if target residues change
         if prev_targets != target_residues:
             st.session_state["saved_mutations"] = []
             st.session_state.pop("step3_result", None)
             st.session_state["step3_done"] = False
         st.session_state["step3_target_res"] = target_residues
 
-        all_aa_options = ['ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR', 'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR']
-        
-        wt_three_letters = set()
-        for res in target_residues:
-            wt_letter = res[-1].upper() if res else None
-            wt_3 = AA_1TO3.get(wt_letter)
-            if wt_3:
-                wt_three_letters.add(wt_3)
+        # ── Amino Acid Selection (Wild-type filtering removed) ──────────────
+        mutation_options = [
+            'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'GLU', 'TYR',
+            'ASP', 'ARG', 'ASN', 'CYS', 'GLN', 'GLY', 'HIS', 'LYS', 'SER', 'THR'
+        ]
 
-        mutation_options = [aa for aa in all_aa_options if aa not in wt_three_letters]
+        def toggle_select_all_aa():
+            if st.session_state["select_all_aa_key"]:
+                st.session_state["mutations_key"] = mutation_options
+            else:
+                st.session_state["mutations_key"] = []
+
+        st.checkbox("Select All Amino Acids", key="select_all_aa_key", on_change=toggle_select_all_aa)
 
         mutations = st.multiselect(
-            "Select Amino Acids", 
-            mutation_options,
+            "Select Amino Acids",
+            options=mutation_options,
             default=[m for m in st.session_state.get("saved_mutations", []) if m in mutation_options],
+            key="mutations_key"
         )
 
     with col2:
         st.subheader("Parameters")
+        
+        # Hardware Detection & Safe Defaults
+        hw = detect_hardware()
+        ram_txt = f"{hw['ram_mib'] / 1024:.1f} GiB RAM" if hw["ram_mib"] else "RAM unknown"
+        st.caption(f"Detected on this computer: {hw['cores']} CPU threads, {ram_txt}, "
+                   f"{hw['gpus']} NVIDIA GPU(s).")
+
         epsilon = st.slider("K* Precision (Epsilon)", 0.01, 1.0, st.session_state.get("saved_epsilon", 0.99))
-        cores = st.number_input("CPU Cores", 1, 16, st.session_state.get("saved_cores", 4))
-        gpus = st.number_input("GPUs", min_value=0, max_value=8, value=st.session_state.get("saved_gpus", 0), step=1)
+        
+        max_cores = hw["cores"]
+        cores = st.number_input("CPU Cores", 1, max_cores, min(st.session_state.get("saved_cores", max_cores), max_cores))
+
+        if hw["gpus"] > 0:
+            gpus = st.number_input("GPUs", min_value=0, max_value=hw["gpus"],
+                                   value=min(st.session_state.get("saved_gpus", hw["gpus"]), hw["gpus"]), step=1)
+        else:
+            gpus = 0
+            st.info("No NVIDIA GPU detected — OSPREY will run on CPU only.")
+
         if gpus > 0:
-            streams_per_gpu = st.number_input("Streams per GPU", min_value=0, max_value=256,
+            streams_per_gpu = st.number_input("Streams per GPU", min_value=1, max_value=256,
                                               value=st.session_state.get("saved_streams", 82), step=1)
             st.session_state["saved_streams"] = streams_per_gpu
         else:
             streams_per_gpu = 0
-            st.info("Streams per GPU set to 0 (no GPU detected)")
-        heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, st.session_state.get("saved_heap", 100000))
-        garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, st.session_state.get("saved_garbage", 8192))
 
+        if hw["heap_mib"]:
+            max_heap = max(1024, hw["ram_mib"])
+            default_heap = hw["heap_mib"]
+        else:
+            max_heap, default_heap = 500000, 4096
+            
+        heap_size = st.number_input("Heap Size (MiB)", 1024, max_heap,
+                                    min(st.session_state.get("saved_heap", default_heap), max_heap))
+
+        max_garbage = max(512, heap_size // 2)
+        default_garbage = hw["garbage_mib"] or max(512, (heap_size // 8) // 256 * 256)
+        garbage_size = st.number_input("Garbage Size (MiB)", 512, max_garbage,
+                                       min(st.session_state.get("saved_garbage", default_garbage), max_garbage))
+
+    # Remember current inputs
     st.session_state.update({
         "saved_mutations": mutations,
         "saved_epsilon":   epsilon,
@@ -573,7 +820,7 @@ elif workflow_step == "3. OSPREY Execution":
     })
 
     if st.button("Generate & Run OSPREY Script"):
-        st.session_state["step3_done"] = False 
+        st.session_state["step3_done"] = False
 
         if not target_residues:
             st.error("❌ Please select at least one residue to mutate.")
@@ -581,33 +828,23 @@ elif workflow_step == "3. OSPREY Execution":
         if not mutations:
             st.error("❌ Please select at least one amino acid before running OSPREY.")
             st.stop()
-            
+
         all_generated_scripts = []
         all_run_results = []
         total_residues = len(target_residues)
 
         try:
-            # ── Progress Tracking Containers ─────────────────────────────
             progress_bar = st.progress(0.0)
             status_text = st.empty()
-            
-            for idx, res in enumerate(target_residues, start=1):
-                # Calculate progress ratio (0.0 to 1.0)
-                progress_ratio = idx / total_residues
-                
-                # Update status message with residue counter and percentage
-                status_text.info(f"⏳ Processing residue **{res}** ({idx}/{total_residues} — {int((idx-1)/total_residues * 100)}% complete)")
-                
-                res_wt_letter = res[-1].upper()
-                res_wt_3 = AA_1TO3.get(res_wt_letter)
-                res_mutations = [aa for aa in mutations if aa != res_wt_3]
-                
-                if not res_mutations:
-                    st.warning(f"Skipping {res}: Selected mutations match wild-type.")
-                    progress_bar.progress(progress_ratio)
-                    continue
 
-                with st.spinner(f"Generating OSPREY script for residue {res}..."):
+            for idx, res in enumerate(target_residues, start=1):
+                progress_ratio = idx / total_residues
+                status_text.info(
+                    f"⏳ Processing residue **{res}** ({idx}/{total_residues} — "
+                    f"{int((idx - 1) / total_residues * 100)}% complete)"
+                )
+
+                with st.spinner(f"Generating OSPREY script for {res}..."):
                     generated = logic3.create_folders_and_files(
                         json_path, pdb_path,
                         epsilon=epsilon,
@@ -617,38 +854,58 @@ elif workflow_step == "3. OSPREY Execution":
                         heap_size=int(heap_size),
                         garbage_size=int(garbage_size),
                         target_residue=res,
-                        amino_acids=res_mutations
+                        amino_acids=mutations
                     )
                     all_generated_scripts.extend(generated)
 
-                with st.spinner(f"Running OSPREY simulation for residue {res}..."):
+                with st.spinner(f"Running OSPREY for {res} (this may take a while)..."):
                     run_results = logic3.run_osprey_scripts(generated)
                     all_run_results.extend(run_results)
-                
-                # Advance progress bar after residue processing completes
+
+                # Save stdout into each residue's folder for Step 4
+                for r in run_results:
+                    if r.get("stdout"):
+                        out_dir = os.path.dirname(os.path.abspath(r["script"]))
+                        with open(os.path.join(out_dir, "osprey_stdout.txt"), "w", encoding="utf-8") as f:
+                            f.write(r["stdout"])
+
+                # Incrementally save successful residues right away
+                if run_results and all(("error" not in r) and r["returncode"] == 0 for r in run_results):
+                    done = list(st.session_state.get("scanned_residues", []))
+                    if res not in done:
+                        done.append(res)
+                    st.session_state["scanned_residues"] = done
+                    active = st.session_state.get("active_combo")
+                    if active in st.session_state.get("runs", {}):
+                        st.session_state["runs"][active]["scanned"] = done
+
                 progress_bar.progress(progress_ratio)
 
-            # Final status update upon loop completion
-            status_text.success(f"✅ Successfully finished running all {total_residues} residue(s)!")
-            
+            status_text.success(f"✅ Finished processing {total_residues} residue(s)!")
+
             st.session_state["osprey_scripts"] = all_generated_scripts
             st.session_state["step3_result"] = {
                 "target_res":  target_residues,
                 "generated":   all_generated_scripts,
                 "run_results": all_run_results,
             }
-            st.session_state["step3_done"] = all(
-                ("error" not in r) and r["returncode"] == 0 for r in all_run_results
-            ) if all_run_results else False
+            st.session_state["step3_done"] = (
+                bool(all_run_results)
+                and all(("error" not in r) and r["returncode"] == 0 for r in all_run_results)
+            )
 
         except ValueError as e:
             st.error(f"❌ Setup error: {e}")
             st.stop()
 
-    # ── Show latest runs ──────────────────────────────────────────────────
+    # ── Show latest run results ───────────────────────────────────────────
     res3 = st.session_state.get("step3_result")
     if res3:
-        st.success(f"{len(res3['generated'])} total OSPREY script(s) generated across selected residues!")
+        ran_for = res3.get("target_res", [])
+        if isinstance(ran_for, str):
+            ran_for = [ran_for]
+        st.success(f"{len(res3['generated'])} OSPREY script(s) generated across {len(ran_for)} residue(s)!")
+        
         with st.expander("View generated script files"):
             for f in res3["generated"]:
                 st.write(f"• {f}")
@@ -661,17 +918,27 @@ elif workflow_step == "3. OSPREY Execution":
             else:
                 st.success(f"✅ {r['script']} completed")
                 if r["stdout"]:
-                    with st.expander(f"View output for {r['script']}"):
+                    with st.expander(f"View output ({os.path.basename(r['script'])})"):
                         st.code(r["stdout"])
 
-    next_step_button("4. Results & Analytics", "Click to head to Results & Analytics", ready=st.session_state.get("step3_done", False))
+    scanned_now = st.session_state.get("scanned_residues", [])
+    if scanned_now:
+        st.info(f"✅ Scanned so far: {', '.join(scanned_now)}. Choose more residues above to add them, "
+                "or go to Results to see everything scanned so far.")
+    
+    next_step_button("3. Results & Analytics", "Click to head to Results & Analytics",
+                     ready=bool(scanned_now))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 4: Results & Analytics  (unchanged)
+# Step 3: Results & Analytics
 # ═══════════════════════════════════════════════════════════════════════════════
-#Step 4: Results
-elif workflow_step == "4. Results & Analytics":
-    st.header("Step 4: Redesign Results")
+elif workflow_step == "3. Results & Analytics":
+    st.header("Step 3: Redesign Results")
+
+    if st.session_state.get("active_combo"):
+        st.caption(f"Chain pairing: **{st.session_state['active_combo']}**. "
+                   "Results from other pairings are kept in their own folders and are "
+                   "not mixed into the heatmap below.")
 
     osprey_scripts = st.session_state.get("osprey_scripts", [])
     results_shown = False
@@ -679,12 +946,16 @@ elif workflow_step == "4. Results & Analytics":
     step3_data = st.session_state.get("step3_result")
 
     if not step3_data or "run_results" not in step3_data:
-        st.warning("No OSPREY simulation results found. Please run Step 3 first.")
+        st.warning("No OSPREY simulation results found. Please run Step 2 (OSPREY Execution) first.")
     else:
         # Pass stdout execution results directly to logic4
-        run_results = step3_data["run_results"]
-        pivot_delta, pivot_annot, summary_table, error = logic4.analyze_results(run_results)
+        base_dir = st.session_state.get("osprey_dir")
+        # ── CHANGED: only include residues scanned in this session ──
+        pivot_delta, pivot_annot, summary_table, error = logic4.analyze_results(
+            base_dir, residues=st.session_state.get("scanned_residues")
+        )
 
+    
         if error:
             st.error(f"Analysis Error: {error}")
         else:
@@ -784,80 +1055,96 @@ elif workflow_step == "4. Results & Analytics":
 
             st.divider()
 
-            # --- Summary table ---
+            # --- Summary table & missing AA inspection ---
+            st.subheader("🔬 Detailed Sequence Scores")
 
             AMINO_ACIDS = [
                 "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
-                "LEU", "LYS", "MET", "PHE", "SER", "THR", "TRP", "TYR", "VAL",
+                "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
             ]
 
-            # --- Parse summary_table into one row per mutation ---
-            raw = summary_table.copy()
-            raw[["Chain", "Position", "WT"]] = raw["Residue Site"].str.extract(r"([A-Za-z])(\d+)=(\w+)")
-            raw["Position"] = pd.to_numeric(raw["Position"], errors="coerce")
+            has_parsed_missing = False
+            try:
+                raw = summary_table.copy()
+                raw[["Chain", "Position", "WT"]] = raw["Residue Site"].str.extract(r"([A-Za-z])(\d+)=(\w+)")
+                raw["Position"] = pd.to_numeric(raw["Position"], errors="coerce")
 
-            tidy_summary = (
-                raw.assign(pair=raw["Mutations & Log10 Scores"].str.findall(r"(\w+)\s*\(([\d.\-eE]+)\)"))
-                .explode("pair")
-                .dropna(subset=["pair"])
-            )
-            tidy_summary[["Mutation", "Log10 Score"]] = pd.DataFrame(
-                tidy_summary["pair"].tolist(), index=tidy_summary.index
-            )
-            tidy_summary["Log10 Score"] = tidy_summary["Log10 Score"].astype(float)
-            tidy_summary["Mutation"] = tidy_summary["Mutation"].str.upper()
-
-            tidy_summary = (
-                tidy_summary
-                .drop(columns=["pair", "Mutations & Log10 Scores"])
-                .drop_duplicates(subset=["Residue Site", "Mutation"])
-                .sort_values(["Chain", "Position", "Log10 Score"], ascending=[True, True, False])
-                .reset_index(drop=True)
-            )
-            tidy_summary = tidy_summary[["Residue Site", "Chain", "Position", "WT", "Mutation", "Log10 Score"]]
-
-            # --- Missing amino acids ---
-            # Per site: which of the 20 were not tested at each residue site
-            site_info = tidy_summary.drop_duplicates("Residue Site")[["Residue Site", "Chain", "Position", "WT"]]
-            tested_by_site = tidy_summary.groupby("Residue Site")["Mutation"].apply(set)
-
-            missing_by_site = site_info.copy()
-            missing_by_site["Missing Amino Acids"] = missing_by_site["Residue Site"].map(
-                lambda s: sorted(set(AMINO_ACIDS) - tested_by_site.get(s, set()))
-            )
-            missing_by_site["# Missing"] = missing_by_site["Missing Amino Acids"].str.len()
-            missing_by_site["Missing Amino Acids"] = missing_by_site["Missing Amino Acids"].apply(", ".join)
-            missing_by_site = missing_by_site.sort_values(["Chain", "Position"]).reset_index(drop=True)
-
-            # Globally: amino acids that never appear at any site
-            missing_globally = sorted(set(AMINO_ACIDS) - set(tidy_summary["Mutation"]))
-
-            # --- UI ---
-            st.subheader("🔬 Detailed Sequence Scores")
-            tab1, tab2, tab3 = st.tabs(["Summary Table", "Raw ΔK* Matrix", "Missing Amino Acids"])
-
-            with tab1:
-                st.write("All tested mutations and their absolute K* scores:")
-                st.dataframe(
-                    tidy_summary,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={"Log10 Score": st.column_config.NumberColumn(format="%.3f")},
+                tidy_summary = (
+                    raw.assign(pair=raw["Mutations & Log10 Scores"].str.findall(r"(\w+)\s*\(([\d.\-eE]+)\)"))
+                    .explode("pair")
+                    .dropna(subset=["pair"])
                 )
+                tidy_summary[["Mutation", "Log10 Score"]] = pd.DataFrame(
+                    tidy_summary["pair"].tolist(), index=tidy_summary.index
+                )
+                tidy_summary["Log10 Score"] = tidy_summary["Log10 Score"].astype(float)
+                tidy_summary["Mutation"] = tidy_summary["Mutation"].str.upper()
 
-            with tab2:
-                st.write("ΔK* matrix (0.000 = Wild-Type reference):")
-                st.dataframe(pivot_delta.style.format("{:.3f}").background_gradient(cmap='Purples'), use_container_width=True)
+                tidy_summary = (
+                    tidy_summary
+                    .drop(columns=["pair", "Mutations & Log10 Scores"])
+                    .drop_duplicates(subset=["Residue Site", "Mutation"])
+                    .sort_values(["Chain", "Position", "Log10 Score"], ascending=[True, True, False])
+                    .reset_index(drop=True)
+                )
+                tidy_summary = tidy_summary[["Residue Site", "Chain", "Position", "WT", "Mutation", "Log10 Score"]]
 
-            with tab3:
-                st.write("Standard amino acids not represented in the summary table:")
-                if missing_globally:
-                    st.warning(f"Never tested at any site: {', '.join(missing_globally)}")
-                else:
-                    st.success("All 20 amino acids appear at least once across the dataset.")
+                site_info = tidy_summary.drop_duplicates("Residue Site")[["Residue Site", "Chain", "Position", "WT"]]
+                tested_by_site = tidy_summary.groupby("Residue Site")["Mutation"].apply(set)
 
-                st.write("Missing amino acids per residue site:")
-                st.dataframe(missing_by_site, use_container_width=True, hide_index=True)
+                missing_by_site = site_info.copy()
+                missing_by_site["Missing Amino Acids"] = missing_by_site["Residue Site"].map(
+                    lambda s: sorted(set(AMINO_ACIDS) - tested_by_site.get(s, set()))
+                )
+                missing_by_site["# Missing"] = missing_by_site["Missing Amino Acids"].str.len()
+                missing_by_site["Missing Amino Acids"] = missing_by_site["Missing Amino Acids"].apply(", ".join)
+                missing_by_site = missing_by_site.sort_values(["Chain", "Position"]).reset_index(drop=True)
+
+                missing_globally = sorted(set(AMINO_ACIDS) - set(tidy_summary["Mutation"]))
+                has_parsed_missing = True
+            except Exception:
+                has_parsed_missing = False
+
+            if has_parsed_missing:
+                tab1, tab2, tab3 = st.tabs(["Residue Breakdown (Dropdowns)", "Raw ΔK* Matrix", "Missing Amino Acids"])
+                
+                with tab1:
+                    st.write("Click on any residue site below to expand and view its tested amino acid mutations and scores:")
+                    
+                    # Group data by each unique residue site
+                    for site_name, group_df in tidy_summary.groupby("Residue Site", sort=False):
+                        wt_aa = group_df["WT"].iloc[0] if not group_df.empty else ""
+                        num_tested = len(group_df)
+                        
+                        with st.expander(f"📍 Residue Site: {site_name}  ({num_tested} mutations tested)"):
+                            st.dataframe(
+                                group_df[["Mutation", "Log10 Score"]].reset_index(drop=True),
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={"Log10 Score": st.column_config.NumberColumn(format="%.3f")},
+                            )
+                
+                with tab2:
+                    st.write("ΔK* matrix (0.000 = Wild-Type reference):")
+                    st.dataframe(pivot_delta.style.format("{:.3f}").background_gradient(cmap='Purples'), use_container_width=True)
+                
+                with tab3:
+                    st.write("Standard amino acids not represented in the summary table:")
+                    if missing_globally:
+                        st.warning(f"Never tested at any site: {', '.join(missing_globally)}")
+                    else:
+                        st.success("All 20 amino acids appear at least once across the dataset.")
+
+                    st.write("Missing amino acids per residue site:")
+                    st.dataframe(missing_by_site, use_container_width=True, hide_index=True)
+            else:
+                tab1, tab2 = st.tabs(["Summary Table", "Raw ΔK* Matrix"])
+                with tab1:
+                    st.write("All tested mutations and their absolute K* scores:")
+                    st.dataframe(summary_table, use_container_width=True, hide_index=True)
+                with tab2:
+                    st.write("ΔK* matrix (0.000 = Wild-Type reference):")
+                    st.dataframe(pivot_delta.style.format("{:.3f}").background_gradient(cmap='Purples'), use_container_width=True)
 
             # --- Export ---
             st.divider()
@@ -870,3 +1157,7 @@ elif workflow_step == "4. Results & Analytics":
                 mime="text/csv",
             )
             results_shown = True
+    next_step_button("2. OSPREY Execution", "Scan another residue", ready=results_shown)
+# ── Sidebar footer ────────────────────────────────────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.write("**Software Team (Davis Lab)**")
