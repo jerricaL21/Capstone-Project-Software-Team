@@ -6,11 +6,15 @@ import sys
 import subprocess
 
 def create_folders_and_files(json_file, pdb_path, epsilon=0.01, cpu_cores=16, gpus = 0, streams_per_gpu = 0, heap_size = 100000, garbage_size = 8192, target_residue=None, amino_acids=None):
-    # Extract the name of the JSON file (without the extension) to be used as the folder name
     pdb_path  = pdb_path.replace("\\", "/")
     json_file = json_file.replace("\\", "/")
     file_name = os.path.splitext(os.path.basename(json_file))[0]
-    output_dir = os.path.join(os.path.dirname(json_file), file_name)
+    
+    # Grab the osprey_output folder from Streamlit's session state
+    import streamlit as st
+    base_output_dir = st.session_state.get("osprey_dir", os.path.dirname(json_file))
+    
+    output_dir = os.path.join(base_output_dir, file_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Read the JSON data from the file
@@ -262,10 +266,12 @@ def run_osprey_scripts(generated_files):
     """Run all generated bbkstar*.py scripts using the current Python interpreter"""
     results = []
     for path in generated_files:
+        # Convert to an absolute path so subprocess doesn't double-up paths with cwd
+        abs_path = os.path.abspath(path)
         folder = os.path.dirname(path)
         try:
             result = subprocess.run(
-                [sys.executable, path],  # ← uses whatever python is running the app
+                [sys.executable, abs_path],  # ← uses whatever python is running the app
                 cwd=folder,
                 capture_output=True,
                 text=True
