@@ -5,6 +5,7 @@ import os
 import importlib
 import shutil
 import re
+import subprocess
 from install_pymol import ensure_pymol
 
 # ── Ensure PyMOL is available in this interpreter (cached so it only
@@ -41,6 +42,87 @@ AA_1TO3 = {
     'L': 'LEU', 'K': 'LYS', 'M': 'MET', 'F': 'PHE', 'P': 'PRO',
     'S': 'SER', 'T': 'THR', 'W': 'TRP', 'Y': 'TYR', 'V': 'VAL',
 }
+
+# ── Hardware detection: Step 2 defaults come from the user's own machine ─────
+def _total_ram_mib():
+    """Total physical RAM in MiB, or None if it can't be determined."""
+    try:
+        import psutil
+        return psutil.virtual_memory().total // (1024 * 1024)
+    except Exception:
+        pass
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class _MemStatus(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = _MemStatus()
+            stat.dwLength = ctypes.sizeof(_MemStatus)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                return stat.ullTotalPhys // (1024 * 1024)
+        else:
+            return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
+    except Exception:
+        pass
+    return None
+
+
+def _cpu_threads():
+    """CPU threads this process is allowed to use."""
+    try:
+        return len(os.sched_getaffinity(0))   # Linux: respects cluster/container limits
+    except AttributeError:
+        return os.cpu_count() or 1            # Windows / macOS
+
+
+def _nvidia_gpu_count():
+    """Number of NVIDIA GPUs reported by nvidia-smi (OSPREY's GPU mode needs CUDA)."""
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return 0
+    try:
+        out = subprocess.run([exe, "--query-gpu=name", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=10)
+        if out.returncode != 0:
+            return 0
+        return len([ln for ln in out.stdout.splitlines() if ln.strip()])
+    except Exception:
+        return 0
+
+
+@st.cache_resource
+def detect_hardware():
+    """
+    Detect this computer's resources once per app session and derive defaults:
+      heap    = 70% of physical RAM (leaves room for the OS, Streamlit and the
+                JVM's own non-heap memory), rounded down to a whole GiB
+      garbage = 1/8 of the heap, rounded down to 256 MiB (min 512)
+    """
+    ram   = _total_ram_mib()
+    cores = _cpu_threads()
+    gpus  = _nvidia_gpu_count()
+
+    if ram:
+        heap = max(1024, int(ram * 0.70) // 1024 * 1024)
+    else:
+        heap = None
+    garbage = max(512, (heap // 8) // 256 * 256) if heap else None
+
+    return {"ram_mib": ram, "cores": cores, "gpus": gpus,
+            "heap_mib": heap, "garbage_mib": garbage}
+
 
 # Page Configuration
 st.set_page_config(page_title="Davis Lab Redesign", layout="wide")
@@ -100,6 +182,62 @@ def auto_residue_range(pdb_path, chain_id, chain_results=None):
         return f"{chain_id}1", f"{chain_id}{chain_results[chain_id]['length']}"
 
     raise ValueError(f"Could not determine residue range for chain {chain_id}.")
+
+# ── Per-chain-combination output folders ─────────────────────────────────────
+# A structure like 1CDL holds several copies of the same complex, so the same
+# PDB can be analysed as A+B, C+D, A+D, and so on. Each pairing gets its own
+# folder, so its PRPPI JSON, OSPREY scripts, stdout and cached energy matrices
+# (emat.*.dat) can never be mistaken for another pairing's.
+#
+#   GUI_results/<pdb stem>/<cam>-<ligand>/{pdb_files, prppi_json, osprey_output}
+
+def combo_key(cam_chain, ligand_chain):
+    """Folder name for a chain pairing, e.g. ('A', 'B') -> 'A-B'."""
+    return f"{cam_chain}-{ligand_chain}"
+
+
+def make_combo_dirs(pdb_sub_dir, combo):
+    """Create (and return) this chain combination's three working folders."""
+    combo_dir = os.path.join(pdb_sub_dir, combo)
+    dirs = {name: os.path.join(combo_dir, name)
+            for name in ("pdb_files", "prppi_json", "osprey_output")}
+    for d in dirs.values():
+        os.makedirs(d, exist_ok=True)
+    return combo_dir, dirs
+
+
+def activate_combo(combo):
+    """
+    Switch the app over to a chain combination: save whatever the current
+    combination has scanned, then load this one's stored results (or clear the
+    Step 1-3 state if it has not been run yet).
+    """
+    runs    = st.session_state.setdefault("runs", {})
+    current = st.session_state.get("active_combo")
+
+    if current and current in runs:
+        runs[current]["scanned"] = list(st.session_state.get("scanned_residues", []))
+
+    st.session_state["active_combo"] = combo
+    saved = runs.get(combo)
+
+    # Results from another combination must not leak into this one's Step 2 / Step 3
+    for k in ("json_path", "analysis_result", "step3_result", "step3_done",
+              "step3_target_res", "saved_mutations", "osprey_scripts"):
+        st.session_state.pop(k, None)
+
+    if saved:
+        st.session_state["json_path"]       = saved["json_path"]
+        st.session_state["path"]            = saved["path"]
+        st.session_state["json_dir"]        = saved["json_dir"]
+        st.session_state["osprey_dir"]      = saved["osprey_dir"]
+        st.session_state["analysis_result"] = saved["analysis_result"]
+        st.session_state["scanned_residues"] = list(saved.get("scanned", []))
+    else:
+        st.session_state["path"] = st.session_state.get("orig_path")
+        st.session_state["scanned_residues"] = []
+        for k in ("json_dir", "osprey_dir"):
+            st.session_state.pop(k, None)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 0: About Section
@@ -174,33 +312,25 @@ elif workflow_step == "1. Data Input":
         # Create a subfolder inside GUI_results named after the PDB file (without .pdb)
         pdb_stem = os.path.splitext(uploaded_pdb.name)[0]
         pdb_sub_dir = os.path.join("GUI_results", pdb_stem)
-        
-        # Creates the paths for the subfolders inside the PDB folder
-        pdb_files_dir = os.path.join(pdb_sub_dir, "pdb_files")
-        json_dir = os.path.join(pdb_sub_dir, "prppi_json")
-        osprey_dir = os.path.join(pdb_sub_dir, "osprey_output")
-        
-        # Creates the actual subfolders inside the PDB folder
-        os.makedirs(pdb_files_dir, exist_ok=True)
-        os.makedirs(json_dir, exist_ok=True)
-        os.makedirs(osprey_dir, exist_ok=True)
-        
-        # Save the original uploaded PDB inside the 'pdb_files' folder
-        new_path = os.path.abspath(os.path.join(pdb_files_dir, uploaded_pdb.name))
+        os.makedirs(pdb_sub_dir, exist_ok=True)
+
+        # The uploaded file is saved at the top of the PDB folder. The three working
+        # folders (pdb_files / prppi_json / osprey_output) are created later, once the
+        # chains are known, inside a folder named after the chain combination — see
+        # make_combo_dirs(). That keeps each chain pairing's results separate.
+        new_path = os.path.abspath(os.path.join(pdb_sub_dir, uploaded_pdb.name))
         with open(new_path, "wb") as f:
             f.write(uploaded_pdb.getvalue())
-        
-        # Storing the location of each folder path
-        
+
         # Save these paths so other parts of the app can find them
-        st.session_state["pdb_files_dir"] = pdb_files_dir
-        st.session_state["json_dir"]      = json_dir
-        st.session_state["osprey_dir"]    = osprey_dir
-        
+        st.session_state["pdb_sub_dir"] = pdb_sub_dir
+
         st.session_state["pdb_name"]  = uploaded_pdb.name
-        st.session_state["orig_path"] = new_path   
-        st.session_state["path"]      = new_path   
+        st.session_state["orig_path"] = new_path
+        st.session_state["path"]      = new_path
         st.session_state["pdb_text"]  = uploaded_pdb.getvalue().decode("utf-8", errors="ignore")
+        # Per-chain-combination results, keyed by combination (e.g. "A-B")
+        st.session_state["runs"] = {}
 
     pdb_name = st.session_state.get("pdb_name")
 
@@ -324,6 +454,19 @@ elif workflow_step == "1. Data Input":
             st.session_state["cam_chain"]    = cam_chain
             st.session_state["ligand_chain"] = ligand_chain
 
+            # The chain pairing decides which results folder is in use, so switching
+            # the selection switches the app over to that pairing's own results.
+            if cam_chain and ligand_chain:
+                combo = combo_key(cam_chain, ligand_chain)
+                if combo != st.session_state.get("active_combo"):
+                    activate_combo(combo)
+                if st.session_state.get("runs", {}).get(combo):
+                    st.caption(f"Showing saved results for chains **{combo}**.")
+                other = [c for c in st.session_state.get("runs", {}) if c != combo]
+                if other:
+                    st.caption("Also analysed this session: " + ", ".join(sorted(other))
+                               + ". Re-select a pairing above to see its results.")
+
         # ── Gate: for >2 chains, wait for a selection before inspecting ───
         if chain_results and len(chain_results) > 2 and not (cam_chain and ligand_chain):
             st.info("Select the calmodulin and peptide/ligand chains above to continue.")
@@ -390,6 +533,25 @@ elif workflow_step == "1. Data Input":
             cam_chain    = st.session_state.get("cam_chain")
             ligand_chain = st.session_state.get("ligand_chain")
             repair_info  = None
+
+            if not cam_chain or not ligand_chain:
+                st.error("❌ Select the main protein chain and the ligand / partner chain "
+                         "before running the analysis.")
+                st.stop()
+
+            # Step 0: this pairing's own folders, and a private copy of the PDB to work on.
+            # Everything downstream (repair, protonation, PRPPI, OSPREY) writes next to
+            # this copy, so one pairing's files never overwrite another's.
+            combo = combo_key(cam_chain, ligand_chain)
+            combo_dir, combo_dirs = make_combo_dirs(st.session_state["pdb_sub_dir"], combo)
+            st.session_state["json_dir"]   = combo_dirs["prppi_json"]
+            st.session_state["osprey_dir"] = combo_dirs["osprey_output"]
+            st.session_state["active_combo"] = combo
+
+            path = os.path.abspath(os.path.join(
+                combo_dirs["pdb_files"], os.path.basename(st.session_state["orig_path"])))
+            shutil.copy(st.session_state["orig_path"], path)
+            st.session_state["path"] = path
 
             # Step A: PDB repair (runs logic5 before prppi)
             if report and (report["has_missing_residues"] or report["has_missing_sidechains"]):
@@ -459,14 +621,27 @@ elif workflow_step == "1. Data Input":
                     "ligand_start": ligand_start, "ligand_end": ligand_end,
                 }
 
+                analysis_result = {"repair": repair_info, "json_path": json_path,
+                                   "ranges": ranges, "combo": combo}
+
                 st.session_state["json_path"]       = json_path
                 st.session_state["step1_done_for"]  = pdb_name
-                st.session_state["analysis_result"] = {"repair": repair_info, "json_path": json_path,
-                                                       "ranges": ranges}
+                st.session_state["step1_done_combo"] = combo
+                st.session_state["analysis_result"] = analysis_result
                 st.session_state.pop("step3_done", None)
                 st.session_state.pop("step3_result", None)
                 st.session_state.pop("osprey_scripts", None)
                 st.session_state["scanned_residues"] = []
+
+                # Remember this pairing so re-selecting it later brings its results back
+                st.session_state.setdefault("runs", {})[combo] = {
+                    "json_path":       json_path,
+                    "path":            st.session_state["path"],
+                    "json_dir":        combo_dirs["prppi_json"],
+                    "osprey_dir":      combo_dirs["osprey_output"],
+                    "analysis_result": analysis_result,
+                    "scanned":         [],
+                }
 
         # ── Show the latest analysis results (persists across steps) ──────
         res = st.session_state.get("analysis_result")
@@ -487,6 +662,10 @@ elif workflow_step == "1. Data Input":
             else:
                 st.info("PDB is complete — skipping repair step.")
 
+            if res.get("combo"):
+                st.caption(f"Chain pairing: **{res['combo']}** "
+                           f"(main protein – ligand). All files for this pairing are kept in "
+                           f"`{os.path.join(st.session_state.get('pdb_sub_dir', ''), res['combo'])}`.")
             st.success(f"Analysis complete! Results saved to: {res['json_path']}")
             rng = res.get("ranges")
             if rng:
@@ -500,15 +679,24 @@ elif workflow_step == "1. Data Input":
                 with open(res["json_path"]) as f:
                     st.json(jsonlib.load(f))
 
-    next_step_button("2. OSPREY Execution", "Click to head to OSPREY Execution",
-                     ready=(pdb_name is not None and st.session_state.get("step1_done_for") == pdb_name))
+    next_step_button(
+        "2. OSPREY Execution", "Click to head to OSPREY Execution",
+        ready=(pdb_name is not None
+               and st.session_state.get("step1_done_for") == pdb_name
+               # the pairing currently selected must be the one that was analysed
+               and st.session_state.get("step1_done_combo") == st.session_state.get("active_combo")),
+    )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 2: OSPREY Execution
 # ═══════════════════════════════════════════════════════════════════════════════
 elif workflow_step == "2. OSPREY Execution":
     st.header("Step 2: OSPREY Simulation Setup")
-    
+
+    if st.session_state.get("active_combo"):
+        st.caption(f"Chain pairing: **{st.session_state['active_combo']}** "
+                   "(change it in Step 1 to work on another pairing).")
+
     json_path = st.session_state.get("json_path", None)
     pdb_path  = st.session_state.get("path", None)
 
@@ -556,18 +744,49 @@ elif workflow_step == "2. OSPREY Execution":
 
     with col2:
         st.subheader("Parameters")
+        hw = detect_hardware()
+        ram_txt = f"{hw['ram_mib'] / 1024:.1f} GiB RAM" if hw["ram_mib"] else "RAM unknown"
+        st.caption(f"Detected on this computer: {hw['cores']} CPU threads, {ram_txt}, "
+                   f"{hw['gpus']} NVIDIA GPU(s).")
+
         epsilon = st.slider("K* Precision (Epsilon)", 0.01, 1.0, st.session_state.get("saved_epsilon", 0.99))
-        cores = st.number_input("CPU Cores", 1, 16, st.session_state.get("saved_cores", 4))
-        gpus = st.number_input("GPUs", min_value=0, max_value=8, value=st.session_state.get("saved_gpus", 0), step=1)
+
+        # Saved values (from earlier on this page) win; otherwise use the detected value.
+        # Everything is clamped to what this machine actually has.
+        max_cores = hw["cores"]
+        cores = st.number_input("CPU Cores", 1, max_cores,
+                                min(st.session_state.get("saved_cores", max_cores), max_cores))
+
+        if hw["gpus"] > 0:
+            gpus = st.number_input("GPUs", min_value=0, max_value=hw["gpus"],
+                                   value=min(st.session_state.get("saved_gpus", hw["gpus"]), hw["gpus"]),
+                                   step=1)
+        else:
+            gpus = 0
+            st.info("No NVIDIA GPU detected — OSPREY will run on CPU only.")
+
         if gpus > 0:
-            streams_per_gpu = st.number_input("Streams per GPU", min_value=0, max_value=256,
+            streams_per_gpu = st.number_input("Streams per GPU", min_value=1, max_value=256,
                                               value=st.session_state.get("saved_streams", 82), step=1)
             st.session_state["saved_streams"] = streams_per_gpu
         else:
             streams_per_gpu = 0
-            st.info("Streams per GPU set to 0 (no GPU detected)")
-        heap_size = st.number_input("Heap Size (MiB)", 1000, 500000, st.session_state.get("saved_heap", 100000))
-        garbage_size = st.number_input("Garbage Size (MiB)", 512, 50000, st.session_state.get("saved_garbage", 8192))
+
+        if hw["heap_mib"]:
+            max_heap = max(1024, hw["ram_mib"])
+            default_heap = hw["heap_mib"]
+        else:
+            st.warning("Could not detect this computer's RAM. Set the heap size by hand "
+                       "(about 70% of your RAM is a good starting point).")
+            max_heap, default_heap = 500000, 4096
+        heap_size = st.number_input("Heap Size (MiB)", 1024, max_heap,
+                                    min(st.session_state.get("saved_heap", default_heap), max_heap))
+
+        # Garbage space is carved out of the heap, so it must stay below it
+        max_garbage = max(512, heap_size // 2)
+        default_garbage = hw["garbage_mib"] or max(512, (heap_size // 8) // 256 * 256)
+        garbage_size = st.number_input("Garbage Size (MiB)", 512, max_garbage,
+                                       min(st.session_state.get("saved_garbage", default_garbage), max_garbage))
 
     # Remember the current inputs so they are still here when you come back to this step
     st.session_state.update({
@@ -626,6 +845,11 @@ elif workflow_step == "2. OSPREY Execution":
                 if target_res not in done:
                     done.append(target_res)
                 st.session_state["scanned_residues"] = done
+                # Keep this pairing's record in step, so switching chains and back
+                # still shows everything scanned for it
+                active = st.session_state.get("active_combo")
+                if active in st.session_state.get("runs", {}):
+                    st.session_state["runs"][active]["scanned"] = done
                 st.rerun()
                  
         except ValueError as e:
@@ -661,6 +885,11 @@ elif workflow_step == "2. OSPREY Execution":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif workflow_step == "3. Results & Analytics":
     st.header("Step 3: Redesign Results")
+
+    if st.session_state.get("active_combo"):
+        st.caption(f"Chain pairing: **{st.session_state['active_combo']}**. "
+                   "Results from other pairings are kept in their own folders and are "
+                   "not mixed into the heatmap below.")
 
     osprey_scripts = st.session_state.get("osprey_scripts", [])
     results_shown = False
