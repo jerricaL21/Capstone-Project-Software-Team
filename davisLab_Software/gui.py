@@ -4,6 +4,7 @@ import time
 import os
 import importlib
 import shutil
+import re
 from install_pymol import ensure_pymol
 
 # ── Ensure PyMOL is available in this interpreter (cached so it only
@@ -33,7 +34,7 @@ importlib.reload(logic3)
 importlib.reload(logic4)
 importlib.reload(logic5)
 
-# Used in Step 3 to figure out which three-letter amino acid code corresponds to wild-type residue code
+# Used in Step 2 (OSPREY) to figure out which three-letter amino acid code corresponds to wild-type residue code
 AA_1TO3 = {
     'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS',
     'Q': 'GLN', 'E': 'GLU', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE',
@@ -55,7 +56,7 @@ st.sidebar.header("Pipeline Controls")
 ABOUT = "About"
 workflow_step = st.sidebar.radio(
     "Navigate Workflow", 
-    [ABOUT, "1. Data Input", "2. JSON Processing", "3. OSPREY Execution", "4. Results & Analytics"],
+    [ABOUT, "1. Data Input", "2. OSPREY Execution", "3. Results & Analytics"],
     key="workflow_step"
 )
 
@@ -69,6 +70,36 @@ def next_step_button(target, label, ready=True):
     st.markdown("---")
     st.button(f"{label}  ➡️", key=f"next_to_{target}", on_click=_go_to_step,
               args=(target,), type="primary", use_container_width=True)
+
+# ── Automatic residue range (replaces the old manual Step 2) ─────────────────
+def _resnum_value(key, chain_id):
+    """'A148' -> 148, 'B-3' -> -3, 'A52A' (insertion code) -> 52."""
+    m = re.match(r"-?\d+", key[len(chain_id):])
+    return int(m.group()) if m else None
+
+def auto_residue_range(pdb_path, chain_id, chain_results=None):
+    """
+    Return (first, last) residue labels for a chain, e.g. ('A0', 'A148'),
+    using the lowest and highest residue numbers present in the PDB.
+    Falls back to 1..length from chain identification if the PDB can't be read.
+    """
+    residue_map = {}
+    if pdb_path and os.path.exists(pdb_path):
+        try:
+            residue_map = logic.get_residue_numbers(pdb_path)
+        except Exception:
+            residue_map = {}
+
+    keys = [k for k in residue_map.get(chain_id, []) if _resnum_value(k, chain_id) is not None]
+    if keys:
+        first = min(keys, key=lambda k: _resnum_value(k, chain_id))
+        last  = max(keys, key=lambda k: _resnum_value(k, chain_id))
+        return first, last
+
+    if chain_results and chain_id in chain_results:
+        return f"{chain_id}1", f"{chain_id}{chain_results[chain_id]['length']}"
+
+    raise ValueError(f"Could not determine residue range for chain {chain_id}.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 0: About Section
@@ -87,7 +118,7 @@ if workflow_step == ABOUT:
 
     ### Workflow Overview
 
-    The portal guides users through four main stages:
+    The portal guides users through three main stages:
 
     **1. Data Input & Structure Preparation**
     - Upload a PDB file and identify the protein chains involved in the complex.
@@ -95,17 +126,14 @@ if workflow_step == ABOUT:
     - Check and repair missing residues or incomplete side chains using PDBFixer and PyMOL.
     - Run PRPPI to identify interacting residues between protein chains and generate a JSON file.
         - **JSON:** A structured file format used to store interaction data for further processing.
+    - Residue ranges for the design are set automatically from the first and last residue of each selected chain.
 
-    **2. JSON Processing**
-    - Process the JSON file
-    - Define the residue ranges used for protein design.
-
-    **3. OSPREY Execution**
+    **2. OSPREY Execution**
     - Select mutation sites and amino acid substitutions.
     - Configure and run OSPREY BBK* calculations.
         - **OSPREY:** A protein design software package that evaluates how mutations may affect protein-protein binding.    
 
-    **4. Results & Analysis**
+    **3. Results & Analysis**
     - Analyze and compare mutant and wild-type K* scores using ΔK*.
     - View results through heatmaps and summary tables.
     - Export results as CSV files.
@@ -412,10 +440,29 @@ elif workflow_step == "1. Data Input":
                     shutil.copy(json_path, target_json_path)
                     json_path = target_json_path
 
+                # Step D: set residue ranges automatically (min → max of each chain)
+                cam_chain_used = cam_chain or st.session_state.get("cam_chain")
+                lig_chain_used = ligand_chain or st.session_state.get("ligand_chain")
+                try:
+                    mutant_start, mutant_end = auto_residue_range(
+                        fixed_pdb, cam_chain_used, st.session_state.get("chain_results"))
+                    ligand_start, ligand_end = auto_residue_range(
+                        fixed_pdb, lig_chain_used, st.session_state.get("chain_results"))
+                    logic2.add_variables_to_json(json_path, mutant_start, mutant_end,
+                                                 ligand_start, ligand_end)
+                except Exception as e:
+                    st.error(f"❌ Could not set residue ranges automatically: {e}")
+                    st.stop()
+
+                ranges = {
+                    "mutant_start": mutant_start, "mutant_end": mutant_end,
+                    "ligand_start": ligand_start, "ligand_end": ligand_end,
+                }
+
                 st.session_state["json_path"]       = json_path
                 st.session_state["step1_done_for"]  = pdb_name
-                st.session_state["analysis_result"] = {"repair": repair_info, "json_path": json_path}
-                st.session_state.pop("step2_done", None)
+                st.session_state["analysis_result"] = {"repair": repair_info, "json_path": json_path,
+                                                       "ranges": ranges}
                 st.session_state.pop("step3_done", None)
                 st.session_state.pop("step3_result", None)
                 st.session_state.pop("osprey_scripts", None)
@@ -441,165 +488,32 @@ elif workflow_step == "1. Data Input":
                 st.info("PDB is complete — skipping repair step.")
 
             st.success(f"Analysis complete! Results saved to: {res['json_path']}")
+            rng = res.get("ranges")
+            if rng:
+                st.info(
+                    f"Residue ranges set automatically — "
+                    f"Calmodulin (mutant): **{rng['mutant_start']} → {rng['mutant_end']}**, "
+                    f"Ligand: **{rng['ligand_start']} → {rng['ligand_end']}**"
+                )
             with st.expander("🔬 View JSON Contents"):
                 import json as jsonlib
                 with open(res["json_path"]) as f:
                     st.json(jsonlib.load(f))
 
-    next_step_button("2. JSON Processing", "Click to head to JSON Processing",
+    next_step_button("2. OSPREY Execution", "Click to head to OSPREY Execution",
                      ready=(pdb_name is not None and st.session_state.get("step1_done_for") == pdb_name))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 2: JSON Processing
+# Step 2: OSPREY Execution
 # ═══════════════════════════════════════════════════════════════════════════════
-elif workflow_step == "2. JSON Processing":
-    st.header("Step 2: JSON Processing")
-
-    json_path = st.session_state.get("json_path", None)
-
-    if json_path:
-        st.session_state["json_paths"] = [json_path]
-        st.session_state["json_path"] = json_path
-    else:
-        uploaded_jsons = st.file_uploader(
-            "Upload Interaction JSON(s)",
-            type=['json'],
-            accept_multiple_files=True
-        )
-        if uploaded_jsons:
-            os.makedirs("uploaded_jsons", exist_ok=True)
-            saved = []
-            for uploaded_json in uploaded_jsons:
-                save_path = os.path.abspath(os.path.join("uploaded_jsons", uploaded_json.name))
-                with open(save_path, "wb") as f:
-                    f.write(uploaded_json.getvalue())
-                saved.append(save_path)
-            st.session_state["json_paths"] = saved
-            st.success(f"{len(saved)} JSON file(s) loaded:")
-            for p in saved:
-                st.write(f"• {p}")
-
-    json_paths = st.session_state.get("json_paths", [])
-
-    if json_paths:
-        import logic2
-        st.subheader("Set Residue Range Boundaries")
-
-        cam_chain     = st.session_state.get("cam_chain", None)
-        ligand_chain  = st.session_state.get("ligand_chain", None)
-        chain_results = st.session_state.get("chain_results", {})
-
-        pdb_path_for_residues = st.session_state.get("path", None)
-
-        residue_map = {}
-        if pdb_path_for_residues and os.path.exists(pdb_path_for_residues):
-            try:
-                residue_map = logic.get_residue_numbers(pdb_path_for_residues)
-            except Exception:
-                pass
-
-        def get_residue_options(chain_id):
-            if chain_id and residue_map:
-                options = residue_map.get(chain_id, [])
-                if options:
-                    return options
-            if chain_id and chain_id in chain_results:
-                length = chain_results[chain_id]["length"]
-                return [f"{chain_id}{i}" for i in range(1, length + 1)]
-            return []
-
-        cam_options    = get_residue_options(cam_chain)
-        ligand_options = get_residue_options(ligand_chain)
-
-        if cam_chain and ligand_chain:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.success(f"Calmodulin chain: **{cam_chain}** ({chain_results[cam_chain]['length']} residues)")
-            with col2:
-                st.info(f"Ligand chain: **{ligand_chain}** ({chain_results[ligand_chain]['length']} residues)")
-        else:
-            st.warning("⚠️ Chain identification not found. Please complete Step 1 first, or enter ranges manually.")
-
-        def _idx(options, key, default):
-            val = st.session_state.get(key)
-            return options.index(val) if val in options else default
-
-        with st.form("residue_form"):
-
-            st.markdown("**Calmodulin (Mutant) Range**")
-            if cam_options:
-                col1, col2 = st.columns(2)
-                with col1:
-                    mutant_start = st.selectbox(
-                        "Mutant Beginning",
-                        options=cam_options,
-                        index=_idx(cam_options, "saved_mutant_start", 0)
-                    )
-                with col2:
-                    mutant_end = st.selectbox(
-                        "Mutant Ending",
-                        options=cam_options,
-                        index=_idx(cam_options, "saved_mutant_end", len(cam_options) - 1)
-                    )
-            else:
-                col1, col2 = st.columns(2)
-                with col1:
-                    mutant_start = st.text_input("Mutant Beginning", value=st.session_state.get("saved_mutant_start", ""))
-                with col2:
-                    mutant_end = st.text_input("Mutant Ending", value=st.session_state.get("saved_mutant_end", ""))
-
-            st.markdown("**Ligand Range**")
-            if ligand_options:
-                col1, col2 = st.columns(2)
-                with col1:
-                    ligand_start = st.selectbox(
-                        "Ligand Beginning",
-                        options=ligand_options,
-                        index=_idx(ligand_options, "saved_ligand_start", 0)
-                    )
-                with col2:
-                    ligand_end = st.selectbox(
-                        "Ligand Ending",
-                        options=ligand_options,
-                        index=_idx(ligand_options, "saved_ligand_end", len(ligand_options) - 1)
-                    )
-            else:
-                col1, col2 = st.columns(2)
-                with col1:
-                    ligand_start = st.text_input("Ligand Beginning", value=st.session_state.get("saved_ligand_start", ""))
-                with col2:
-                    ligand_end = st.text_input("Ligand Ending", value=st.session_state.get("saved_ligand_end", ""))
-
-            submitted = st.form_submit_button("▶ Process JSON(s)")
-
-        if submitted:
-            if not all([mutant_start, mutant_end, ligand_start, ligand_end]):
-                st.error("❌ Please fill in all four residue range fields before proceeding.")
-            else:
-                for json_file in json_paths:
-                    logic2.add_variables_to_json(json_file, mutant_start, mutant_end, ligand_start, ligand_end)
-                st.session_state.update({
-                    "saved_mutant_start": mutant_start, "saved_mutant_end": mutant_end,
-                    "saved_ligand_start": ligand_start, "saved_ligand_end": ligand_end,
-                    "step2_done": True,
-                })
-                st.success("All JSON files processed!")
-        elif st.session_state.get("step2_done"):
-            st.success("All JSON files processed!")
-
-    next_step_button("3. OSPREY Execution", "Click to head to OSPREY Execution", ready=st.session_state.get("step2_done", False))
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Step 3: OSPREY Execution
-# ═══════════════════════════════════════════════════════════════════════════════
-elif workflow_step == "3. OSPREY Execution":
-    st.header("Step 3: OSPREY Simulation Setup")
+elif workflow_step == "2. OSPREY Execution":
+    st.header("Step 2: OSPREY Simulation Setup")
     
     json_path = st.session_state.get("json_path", None)
     pdb_path  = st.session_state.get("path", None)
 
     if not json_path or not pdb_path:
-        st.warning("Please complete Steps 1 and 2 first.")
+        st.warning("Please complete Step 1 (Run Analysis) first.")
         st.stop()
 
     import json as jsonlib
@@ -706,7 +620,7 @@ elif workflow_step == "3. OSPREY Execution":
                 ("error" not in r) and r["returncode"] == 0 for r in run_results
             )
             # Keep a running list of residues that finished successfully so results
-            # from every scan can be viewed together in Step 4.
+            # from every scan can be viewed together in Step 3.
             if st.session_state["step3_done"]:
                 done = list(st.session_state.get("scanned_residues", []))
                 if target_res not in done:
@@ -739,14 +653,14 @@ elif workflow_step == "3. OSPREY Execution":
     if st.session_state.get("step3_done", False):
         st.info(f"✅ {target_res} finished. Choose another residue above to scan it too, "
                 "or go to Results to see everything scanned so far.")
-    next_step_button("4. Results & Analytics", "Click to head to Results & Analytics",
+    next_step_button("3. Results & Analytics", "Click to head to Results & Analytics",
                      ready=bool(st.session_state.get("scanned_residues")))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 4: Results & Analytics
+# Step 3: Results & Analytics
 # ═══════════════════════════════════════════════════════════════════════════════
-elif workflow_step == "4. Results & Analytics":
-    st.header("Step 4: Redesign Results")
+elif workflow_step == "3. Results & Analytics":
+    st.header("Step 3: Redesign Results")
 
     osprey_scripts = st.session_state.get("osprey_scripts", [])
     results_shown = False
@@ -754,7 +668,7 @@ elif workflow_step == "4. Results & Analytics":
     step3_data = st.session_state.get("step3_result")
 
     if not step3_data or "run_results" not in step3_data:
-        st.warning("No OSPREY simulation results found. Please run Step 3 first.")
+        st.warning("No OSPREY simulation results found. Please run Step 2 (OSPREY Execution) first.")
     else:
         # Pass stdout execution results directly to logic4
         base_dir = st.session_state.get("osprey_dir")
@@ -956,7 +870,7 @@ elif workflow_step == "4. Results & Analytics":
                 mime="text/csv",
             )
             results_shown = True
-    next_step_button("3. OSPREY Execution", "Scan another residue", ready=results_shown)
+    next_step_button("2. OSPREY Execution", "Scan another residue", ready=results_shown)
 # ── Sidebar footer ────────────────────────────────────────────────────────────
 st.sidebar.markdown("---")
 st.sidebar.write("**Software Team (Davis Lab)**")
